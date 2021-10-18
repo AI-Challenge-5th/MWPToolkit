@@ -10,7 +10,7 @@ import warnings
 from logging import getLogger
 
 import torch
-from transformers import RobertaTokenizer,BertTokenizer
+from transformers import ElectraTokenizer,RobertaTokenizer,BertTokenizer
 
 from mwptoolkit.data.dataset.abstract_dataset import AbstractDataset
 from mwptoolkit.utils.enum_type import DatasetName, MaskSymbol, NumMask,TaskType,FixType,Operators,SpecialTokens

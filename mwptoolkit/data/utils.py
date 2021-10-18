@@ -34,7 +34,7 @@ def create_dataset(config):
     if config['model'].lower() in ['ept']:
         return DatasetEPT(config)
     if config['embedding'] != None:
-        if config['embedding'] == 'ko-roberta':
+        if config['embedding'] in ['ko-roberta', 'koelectra']:
             return KoreanRobertaDataset(config)
         return PretrainDataset(config)
     task_type = config['task_type'].lower()
