@@ -208,6 +208,8 @@ class PretrainDataset(AbstractDataset):
             tokenizer=BertTokenizer.from_pretrained(self.pretrained_model_path)
         elif self.embedding=='roberta':
             tokenizer=RobertaTokenizer.from_pretrained(self.pretrained_model_path)
+        elif self.embedding=='ko-roberta':
+            tokenizer=BertTokenizer.from_pretrained(self.pretrained_model_path)
         else:
             raise NotImplementedError
         # if self.mask_symbol==MaskSymbol.NUM:
