@@ -10,6 +10,7 @@ from mwptoolkit.data.dataset.multi_equation_dataset import MultiEquationDataset
 from mwptoolkit.data.dataset.dataset_multiencdec import DatasetMultiEncDec
 from mwptoolkit.data.dataset.dataset_ept import DatasetEPT
 from mwptoolkit.data.dataset.pretrain_dataset import PretrainDataset
+from mwptoolkit.data.dataset.korean_dataset import KoreanRobertaDataset
 
 from mwptoolkit.data.dataloader.abstract_dataloader import AbstractDataLoader
 from mwptoolkit.data.dataloader.single_equation_dataloader import SingleEquationDataLoader
@@ -33,6 +34,8 @@ def create_dataset(config):
     if config['model'].lower() in ['ept']:
         return DatasetEPT(config)
     if config['embedding'] != None:
+        if config['embedding'] == 'ko-roberta':
+            return KoreanRobertaDataset(config)
         return PretrainDataset(config)
     task_type = config['task_type'].lower()
     if task_type == TaskType.SingleEquation:

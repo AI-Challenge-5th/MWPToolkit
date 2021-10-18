@@ -1,0 +1,5 @@
+﻿Question,Numbers,Equation,Answer,group_nums,Type,Variation Type,Body,Ques
+상자 안에 number0 개의 공이 있습니다. 석진이가 number1 개의 공을 상자 안에 더 넣었습니다. 상자 안에 있는 공은 모두 몇 개입니까?,9 5,+ number0 number1,14.0,"[1, 2, 3, 4, 5, 6, 12, 13, 14, 28, 29, 30]",Addition,11,상자 안에 number0 개의 공이 있습니다. 석진이가 number1 개의 공을 상자 안에 더 넣었습니다.,상자 안에 있는 공은 모두 몇 개입니까?
+number0 부터 number1 까지의 홀수의 합을 구하시오.,1 200,+ number0 number1,14.0,"[1, 2, 3, 4, 5, 6, 12, 13, 14, 28, 29, 30]",Subtraction,11,number0 부터 number1 까지,홀수의 합을 구하시오.
+한 상자에는 감이 number0 개씩 들어있습니다. number1 개의 상자 안에 있는 감은 모두 몇 개일까요?,100 6,* number0 number1,14.0,"[1, 2, 3, 4, 5, 6, 12, 13, 14, 28, 29, 30]",Subtraction,11,한 상자에는 감이 number0 개씩 들어있습니다. ,number1 개의 상자 안에 있는 감은 모두 몇 개일까요?
+"지민, 정국, 태형이의 수학 점수는 각각 number0 점, number1 점, number2 점입니다. 이 셋을 제외한 학급의 수학 점수 평균은 number3 점입니다. 지민이네 학급 인원수가 number4 명일 때, 학급 수학 평균 점수는 몇 점입니까?",94 82 88 78 30,- 1 0,14.0,"[1, 2, 3, 4, 5, 6, 12, 13, 14, 28, 29, 30]",Subtraction,11,"지민, 정국, 태형이의 수학 점수는 각각 number0 점, number1 점, number2 점입니다. 이 셋을 제외한 학급의 수학 점수 평균은 number3 점입니다. 이 셋을 제외한 학급의 수학 점수 평균은 number3 점입니다."," 지민이네 학급 인원수가 number4 명일 때, 학급 수학 평균 점수는 몇 점입니까?"

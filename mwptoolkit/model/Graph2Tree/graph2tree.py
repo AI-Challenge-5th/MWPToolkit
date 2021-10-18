@@ -72,6 +72,8 @@ class Graph2Tree(nn.Module):
         #module
         if config['embedding'] == 'roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+        elif config['embedding'] == 'ko-roberta':
+            self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
         elif config['embedding'] == 'koelectra':
@@ -175,7 +177,10 @@ class Graph2Tree(nn.Module):
             num_mask = num_mask.cuda()
 
         # Run words through encoder
-        seq_emb = self.embedder(input_var)
+        if isinstance(self.embedder, RobertaEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        else:
+            seq_emb = self.embedder(input_var)
         encoder_outputs, problem_output = self.encoder(seq_emb, input_length, graph)
 
         # Prepare input and output variables
@@ -271,7 +276,10 @@ class Graph2Tree(nn.Module):
             num_mask = num_mask.cuda()
         # Run words through encoder
 
-        seq_emb = self.embedder(input_var)
+        if isinstance(self.embedder, RobertaEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        else:
+            seq_emb = self.embedder(input_var)
         encoder_outputs, problem_output = self.encoder(seq_emb, input_length, graph)
 
         # Prepare input and output variables
@@ -509,6 +517,8 @@ class _Graph2Tree_(nn.Module):
             self.out_pad_token = None
         #module
         if config['embedding'] == 'roberta':
+            self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+        elif config['embedding'] == 'ko-roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
