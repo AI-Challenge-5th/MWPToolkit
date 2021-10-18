@@ -14,6 +14,7 @@ from mwptoolkit.module.Encoder.graph_based_encoder import GraphBasedEncoder
 from mwptoolkit.module.Embedder.basic_embedder import BaiscEmbedder
 from mwptoolkit.module.Embedder.roberta_embedder import RobertaEmbedder
 from mwptoolkit.module.Embedder.bert_embedder import BertEmbedder
+from mwptoolkit.module.Embedder.koelectra_embedder import KoElectraEmbedder
 from mwptoolkit.module.Decoder.tree_decoder import TreeDecoder
 from mwptoolkit.module.Layer.tree_layers import NodeGenerater, SubTreeMerger, TreeNode, TreeEmbedding
 from mwptoolkit.module.Layer.tree_layers import Prediction, GenerateNode, Merge
@@ -73,6 +74,8 @@ class Graph2Tree(nn.Module):
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
+        elif config['embedding'] == 'koelectra':
+            self.embedder = KoElectraEmbedder(self.vocab_size, config['pretrained_model_path'])
         else:
             self.embedder = BaiscEmbedder(self.vocab_size, self.embedding_size, self.dropout_ratio)
         self.encoder=GraphBasedEncoder(self.embedding_size,self.hidden_size,self.rnn_cell_type,\
