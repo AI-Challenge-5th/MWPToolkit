@@ -179,8 +179,11 @@ class Graph2Tree(nn.Module):
         # Run words through encoder
         if isinstance(self.embedder, RobertaEmbedder):
             seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        elif isinstance(self.embedder, KoElectraEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
         else:
             seq_emb = self.embedder(input_var)
+        
         encoder_outputs, problem_output = self.encoder(seq_emb, input_length, graph)
 
         # Prepare input and output variables
@@ -277,6 +280,8 @@ class Graph2Tree(nn.Module):
         # Run words through encoder
 
         if isinstance(self.embedder, RobertaEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        elif isinstance(self.embedder, KoElectraEmbedder):
             seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
         else:
             seq_emb = self.embedder(input_var)

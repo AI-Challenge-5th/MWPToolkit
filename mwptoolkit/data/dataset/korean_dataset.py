@@ -13,28 +13,34 @@ from collections import OrderedDict
 
 import torch
 from transformers import RobertaTokenizer,BertTokenizer,AutoTokenizer
+from pororo import Pororo
+import stanza
+import pickle
+
 
 from mwptoolkit.data.dataset.abstract_dataset import AbstractDataset
 from mwptoolkit.data.dataset.pretrain_dataset import PretrainDataset
 from mwptoolkit.utils.enum_type import DatasetName, MaskSymbol, NumMask,TaskType,FixType,Operators,SpecialTokens
-from mwptoolkit.utils.preprocess_tools import id_reedit
+from mwptoolkit.utils.preprocess_tools import id_reedit, ID_reedit
 from mwptoolkit.utils.preprocess_tool.equation_operator import from_infix_to_multi_way_tree
 from mwptoolkit.utils.preprocess_tool.equation_operator import from_infix_to_postfix, from_infix_to_prefix, from_postfix_to_infix, from_postfix_to_prefix, from_prefix_to_infix, from_prefix_to_postfix
 from mwptoolkit.utils.preprocess_tool.sentence_operator import deprel_tree_to_file, get_group_nums_, span_level_deprel_tree_to_file, get_span_level_deprel_tree_, get_deprel_tree_
 from mwptoolkit.utils.preprocess_tool.number_transfer import seg_and_tag_svamp, get_num_pos
-from mwptoolkit.utils.utils import read_json_data, str2float
+from mwptoolkit.utils.utils import write_json_data, read_json_data, str2float, lists2dict
 
 
 class KoreanRobertaDataset(PretrainDataset):
     def __init__(self, config):
         super().__init__(config)
         self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
+        special_tokens_dict = {'additional_special_tokens': ["NUM"]}
+        self.tokenizer.add_special_tokens(special_tokens_dict)
 
     def _preprocess(self):
         if self.dataset in [DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset)
         transfer = number_transfer_kor
-
+        self.trainset, self.validset, self.testset = ID_reedit(self.trainset, self.validset, self.testset)
         self.trainset, generate_list, train_copy_nums, unk_symbol = transfer(self.trainset, self.dataset,
                                                                              self.task_type, self.mask_symbol,
                                                                              self.min_generate_keep, self.tokenizer, ";")
@@ -111,6 +117,7 @@ class KoreanRobertaDataset(PretrainDataset):
             else:
                 logger = getLogger()
                 logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
+                
                 deprel_tree_to_file(self.trainset, self.validset, self.testset, \
                                     self.parse_tree_path, self.language, use_gpu)
                 self.trainset, self.validset, self.testset, token_list = \
@@ -129,18 +136,26 @@ class KoreanRobertaDataset(PretrainDataset):
                 self.trainset, self.validset, self.testset, self.max_span_size = \
                     get_span_level_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
         if self.model.lower() in ['graph2tree']:
-            if os.path.exists(self.parse_tree_path) and not self.rebuild:
-                logger = getLogger()
-                logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
-                self.trainset, self.validset, self.testset = \
-                    get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
-            else:
-                logger = getLogger()
-                logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
-                deprel_tree_to_file(self.trainset, self.validset, self.testset, \
-                                    self.parse_tree_path, self.language, use_gpu)
-                self.trainset, self.validset, self.testset = \
-                    get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+            logger = getLogger()
+            logger.info("build kor deprel tree infomation to {} ...".format(self.parse_tree_path))
+            q_infos = kor_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+                                    self.parse_tree_path, self.tokenizer, use_gpu)
+            self.trainset, self.validset, self.testset = \
+                    kor_get_group_nums_(self.trainset, self.validset, self.testset, q_infos)
+#             self.parse_tree_path = "deprel_tree_info"
+#             if os.path.exists(self.parse_tree_path) and not self.rebuild:
+#                 logger = getLogger()
+#                 logger.info("read kor deprel tree infomation from {} ...".format(self.parse_tree_path))
+#                 self.trainset, self.validset, self.testset = \
+#                     kor_get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+#             else:
+#                 logger = getLogger()
+#                 logger.info("build kor deprel tree infomation to {} ...".format(self.parse_tree_path))
+#                 kor_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+#                                     self.parse_tree_path, self.tokenizer, use_gpu)
+#                 self.trainset, self.validset, self.testset = \
+#                     kor_get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+
 
 
 def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_keep, tokenizer, equ_split_symbol=';'):
@@ -157,7 +172,8 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
         tuple(list,list,int,list):
         processed datas, generate number list, copy number, unk symbol list.
     """
-    transfer = _num_transfer_kor
+#     transfer = _num_transfer_kor
+    transfer = _num_transfer_transformer
 
     generate_nums = []
     generate_nums_dict = {}
@@ -239,7 +255,6 @@ def _num_transfer_kor(data, tokenizer, mask_type):
     input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = get_num_pos(input_seq, mask_type, pattern)
 
     out_seq = seg_and_tag_svamp(equations, nums_fraction, nums)
-
     source = copy.deepcopy(input_seq)
     for pos in all_pos:
         for key, value in num_pos_dict.items():
@@ -248,7 +263,330 @@ def _num_transfer_kor(data, tokenizer, mask_type):
                 break
         num = str(str2float(num_str))
         source[pos] = num
+    source2 = tokenizer.convert_tokens_to_string(source)   
     source = ' '.join(source)
+#     source = ' '.join(source).replace("#", "")
+
+    new_data = data
+    new_data["question"] = input_seq
+    new_data["ques source 1"] = source
+    new_data["ques source 2"] = source2 #for pororo
+    new_data["equation"] = out_seq
+    new_data["number list"] = num_list
+    new_data["number position"] = num_pos
+    new_data["id"] = data["ID"]
+    new_data["ans"] = data["Answer"]
+
+    return new_data
+
+
+def sentence_preprocess(sentence):
+    sentence = sentence.replace("(", "")
+    sentence = sentence.replace(")", "")
+    sentence = sentence.replace("$", "") # 이게 정보 일 수 있는데 제거 하는게 맞나
+    sentence = sentence.replace("'", "")
+    sentence = sentence.replace("`", "")
+    return sentence
+
+
+def transfer_digit_to_num(question):
+    pattern = re.compile("\d+\/\d+%?|\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
+    nums = OrderedDict()
+    num_list = []
+    input_seq = []
+    question = sentence_preprocess(question)
+    seg = question.split(" ")
+    for s in seg:
+        pos = re.search(pattern, s)
+        if pos and pos.start() == 0:
+            input_seq.append("NUM")
+            num_list.append(str(str2float(s[pos.start():pos.end()])))
+            if pos.end() < len(s):
+                input_seq.append(s[pos.end():])
+        else:
+            input_seq.append(s)
+    return " ".join(input_seq), num_list
+
+
+def kor_get_num_pos(input_seq, num_list):
+    
+    sent_mask_list = NumMask.NUM
+    equ_mask_list = NumMask.number
+    
+    pattern = re.compile("NUM")
+    nums = OrderedDict()
+    num_idx = 0
+    num_pos = []
+    num_pos_dict = {}
+    # find all number position
+    for word_pos, word in enumerate(input_seq):
+        pos = re.search(pattern, word)
+        if pos and pos.start() == 0:
+#             num_list.append(word)
+            num_pos.append(word_pos)
+            if num_list[num_idx] in num_pos_dict:
+                num_pos_dict[num_list[num_idx]].append(word_pos)
+            else:
+                num_pos_dict[num_list[num_idx]] = [word_pos]
+            num_idx += 1
+    mask_list = equ_mask_list[:len(num_list)]
+    new_num_list = []
+    new_mask_list = []
+    for i in num_list:
+        if num_list.count(i) != 1:
+            x = 1
+        if num_list.count(i) == 1:
+            new_num_list.append(i)
+            new_mask_list.append(mask_list[num_list.index(i)])
+        else:
+            pass
+    nums = lists2dict(new_num_list, new_mask_list)
+    nums_for_ques = lists2dict(num_list, sent_mask_list[:len(num_list)])
+    
+    # all number position
+    all_pos = []
+    all_pos = copy.deepcopy(num_pos)
+    # final numbor position
+    final_pos = []
+    final_pos = copy.deepcopy(num_pos)
+    
+    nums_fraction = []
+    for num, mask in nums.items():
+        if re.search("\d*\(\d+/\d+\)\d*", num):
+            nums_fraction.append(num)
+    nums_fraction = sorted(nums_fraction, key=lambda x: len(x), reverse=True)
+    
+    return input_seq, num_list, final_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction
+
+
+def kor_deprel_tree_to_file(trainset, validset, testset, parse_tree_path, tokenizer, use_gpu):
+    questions_infos = {}
+    dp = Pororo(task="dep_parse", lang="ko")
+    pos = Pororo(task='pos', lang='ko')
+    print("dataset length , ", len(trainset), len(validset), len(testset) )
+    questions_infos['trainset'] = get_token_info(trainset, dp, pos, tokenizer)
+    questions_infos['validset'] = get_token_info(validset, dp, pos, tokenizer)    
+    questions_infos['testset'] = get_token_info(testset, dp, pos, tokenizer)
+#     with open(parse_tree_path , 'wb') as f:
+#         pickle.dump(parse_tree_path+".pkl", f)
+    return questions_infos
+
+
+# +
+def is_float_form(group, token):
+    return (len(group) > 0 and str.isdecimal(group[-1][-1]) and token =='.') or \
+            (len(group) > 1 and str.isdecimal(group[-2][-1]) and group[-1][-1] == '.' and str.isdecimal(token))
+
+
+def group_sub_tokens(tokens):
+    token_group = []
+    group = []
+    for i, token in enumerate(tokens):
+        if not token.startswith('##') and not is_float_form(group, token) and len(group) > 0:
+            token_group.append(tuple(group))
+            group = []
+        group.append((i, token))
+    if len(group) > 0:
+        token_group.append(group)
+    return token_group
+
+def group_pos(pos_list):
+    pos_group = []
+    group = []
+    for i, pos in enumerate(pos_list):
+        t, p = pos
+#         if p == 'SPACE' and len(group) > 0:
+#             pos_group.append(group)
+#             group = []
+#             continue
+#         if p.startswith('S'):
+#             if len(group) > 0:
+#                 pos_group.append(group)
+#             if p in {'SF', 'SP', 'SS', 'SE', 'SO'}:
+#                 pos_group.append([pos])
+#             group = []
+#             continue
+        if t.startswith('\u200b'):
+            continue
+        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'}:
+            if len(group) > 0:
+                pos_group.append(group)
+            if p != 'SPACE':
+                pos_group.append([(i,) + pos])
+            group = []
+            continue
+        group.append((i,) + pos)
+    if len(group) > 0:
+        pos_group.append(group)
+    return pos_group
+
+def sentence_preprocess_dp(sentence):
+    decimal = ['.', '?', '!','~',',', '`']
+    result = ''
+    for idx in range(len(sentence)):
+        cur_char = sentence[idx]
+        if idx > 0 and cur_char in decimal:                
+            pre_char = sentence[idx-1]
+            
+            if idx < len(sentence)-1:
+                next_char = sentence[idx+1]
+                if not next_char.isdigit():
+                    result += " "
+            elif not pre_char.isdigit():
+                result += " "
+        result += cur_char
+        
+    return result
+
+
+# -
+
+def get_token_info(dataset, dp, pos, tokenizer):
+    questions_info = {}
+    for data in  dataset:
+        question_list = []
+        question = tokenizer.convert_tokens_to_string(data["question"])
+        q, num_list = transfer_digit_to_num(question) #input은 변경 가능
+        tr = group_sub_tokens(data["question"])
+        dpr = dp(sentence_preprocess_dp(q))
+        pr = group_pos(pos(q))
+        
+        #잘못된 데이터 들어오면
+        if len(tr) != len(dpr) or len(tr) != len(pr):
+            print('grouping fail!')
+            if len(tr) != len(dpr):
+                n = len(tr) - len(dpr)
+                dpr += dpr[-n:]
+            
+            if len(tr) != len(pr):
+                n = len(tr) - len(pr)
+                pr += pr[-n:]
+
+        for t_group, p_group, d_group in zip(tr, pr, dpr):
+            for token in t_group:
+                question_info = {}
+                question_info['token']=token[1]
+                question_info['token_pos']=token[0]
+                question_info['pos']=p_group[0][2]
+                question_info['deprel']=d_group[3]
+                question_info['head']=d_group[2]
+                question_info['dep_pos']=d_group[0]
+                question_list.append(question_info)
+            
+        questions_info[data['id']] =  question_list 
+            
+            
+    return questions_info
+
+
+def kor_get_group_nums_(trainset, validset, testset, q_infos):
+#     q_infos = None
+#     with open(path+".pkl", 'rb') as f:
+#         q_infos = pickle.load(f)
+    print(len(q_infos['trainset']),len(q_infos['validset']),len(q_infos['testset']) )
+    trainset = get_group_num(trainset, q_infos['trainset'])
+    validset = get_group_num(validset, q_infos['validset'])    
+    testset = get_group_num(testset, q_infos['testset'])
+    return trainset, validset, testset
+
+
+# +
+
+def get_group_num(dataset, q_info):
+    valid_tags = {
+    'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
+    'MM',  # adjectives
+    'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
+    'SN',  # quantities
+    }
+    
+    for data in dataset:
+        question_id = data["id"]
+        num_pos = data["number position"]
+        group_nums = []
+        info = q_info[question_id]
+#         print(data)
+#         print(info)
+#         print(num_pos, len(info))
+        
+        dep_pos, dep_info, dep_head = get_dprel_info(info)
+        sent_len = len(dep_pos)
+        for token_npos in num_pos:
+            npos = info[token_npos]['dep_pos']
+            pos_stack = []
+            group_num = []            
+            pos_stack.append(dep_head[npos-1])
+            level = 0
+            while pos_stack:
+                head = pos_stack.pop(0)
+                for token_pos in dep_pos[head-1]:
+                    #and info[token_pos]["pos"] in valid_tags
+                    if token_pos not in group_num and info[token_pos]["pos"] in valid_tags:
+                        group_num.append(token_pos)
+
+                # -1 최상위 , level -> depth 깊이
+                if head != -1 and level < 2:
+                    level += 1
+                    for idx in range(len(dep_info)):
+                        di = dep_info[idx]
+                        #동일한 토큰 체크 and 같은 head를 가르키는 토큰 포함
+                        if idx != head-1 and dep_head[idx] == head:
+                            #현재 head 보다 전 토큰일땐, NP_SBJ만 선택
+                            if idx < head and di != 'NP_SBJ':
+                                continue
+
+                            for token_pos in dep_pos[idx]:
+                                #group_num에 토큰 없고 and valid_tags 있어야함
+                                if token_pos not in group_num and info[token_pos]["pos"] in valid_tags:
+                                    group_num.append(token_pos)
+                    # next head        
+                    pos_stack.append(dep_head[head-1])
+            if group_num == []:
+                    group_num += dep_pos[npos-1]
+            if npos - 1 >= 0:
+                    group_num += dep_pos[npos-1]
+            if npos + 1 < sent_len:
+                    group_num += dep_pos[npos+1]
+            group_nums.append(group_num)
+        data["group nums"] = group_nums
+    return dataset
+
+
+# -
+
+def get_dprel_info(q_info):
+    dep_pos = [ [] for _ in range(max([x['dep_pos'] for x in q_info]))]
+    dep_info = [None] * max([x['dep_pos'] for x in q_info])
+    dep_head = [None] * max([x['dep_pos'] for x in q_info])
+    for idx, info in enumerate(q_info):
+        dep_pos[info['dep_pos']-1].append(idx)
+        dep_info[info['dep_pos']-1] = info['deprel']
+        dep_head[info['dep_pos']-1] = info['head']
+    return dep_pos, dep_info, dep_head
+    
+
+
+def _num_transfer_transformer(data, tokenizer, mask_type):
+
+    question, num_list = transfer_digit_to_num(data['Question'])
+    input_seq = tokenizer.tokenize(question)
+    equations = data['Equation']
+    if equations.startswith('( ') and equations.endswith(' )'):
+        equations = equations[2:-2]
+        
+
+    input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = kor_get_num_pos(input_seq, num_list)
+
+    out_seq = seg_and_tag_svamp(equations, nums_fraction, nums)
+    source = copy.deepcopy(input_seq)
+    for pos in all_pos:
+        for key, value in num_pos_dict.items():
+            if pos in value:
+                num_str = key
+                break
+        num = str(str2float(num_str))
+        source[pos] = num
+    source = tokenizer.convert_tokens_to_string(source)
 
     new_data = data
     new_data["question"] = input_seq
@@ -260,3 +598,72 @@ def _num_transfer_kor(data, tokenizer, mask_type):
     new_data["ans"] = data["Answer"]
 
     return new_data
+
+# +
+
+
+def pororo_pipeline(question, token_question, dp, pos, lemma, template_nlp):
+    template_doc = template_nlp(token_question).to_dict()
+    depenp = dp(question)
+    # lemma_doc = lemma(question).to_dict()
+    # pos_sentence = pos(question)
+    # pos_sentence = [p for p in pos_sentence if p[1] != 'SPACE' ]
+
+    depenp_idx = 0
+    # pos_idx = 0
+#     lemma_idx = 0
+    sentence_lemma_idx = 0
+    current_word_for_depenp = ''
+    # current_word_for_pos = ''
+    # current_word_for_lemma = ''
+
+    new_doc = []
+    for sentence_idx in range(len(template_doc)):
+        current_sentence = template_doc[sentence_idx]
+        new_sentence = []
+
+        for token in current_sentence:
+            new_token = copy.deepcopy(token)
+            current_word_for_depenp += token['text'].replace("#","")
+    #         current_word_for_pos += token['text'].replace("#","")
+    #         current_word_for_lemma += token['text'].replace("#","")
+            new_token['deprel']=depenp[depenp_idx][3]
+    #         new_token['lemma']=lemma_doc[sentence_lemma_idx][lemma_idx]['lemma']
+            new_sentence.append(new_token)
+
+            if current_word_for_depenp == depenp[depenp_idx][1] or len(current_word_for_depenp) > len(depenp[depenp_idx][1]):
+                current_word_for_depenp = ''
+                depenp_idx += 1
+
+    #         if current_word_for_pos == pos_sentence[pos_idx][0] or len(current_word_for_pos) > len(pos_sentence[pos_idx][0]):
+    #             current_word_for_pos = ''
+    #             pos_idx +=1
+
+    #         if current_word_for_lemma == lemma_doc[sentence_lemma_idx][lemma_idx]['text'] or len(current_word_for_lemma) > len(lemma_doc[sentence_lemma_idx][lemma_idx]['text']):
+    #             current_word_for_lemma = ''
+
+    #             lemma_idx += 1
+    #             if lemma_idx >= len(lemma_doc[sentence_lemma_idx]):
+    #                 sentence_lemma_idx += 1
+    #                 lemma_idx = 0
+        new_doc.append(new_sentence)
+    return new_doc
+
+    
+def kor_deprel_tree_to_file_(train_datas, valid_datas, test_datas, path, language, use_gpu):
+    dp = Pororo(task="dep_parse", lang="ko")
+    pos = Pororo(task="pos", lang="ko")
+    lemma = stanza.Pipeline(lang='ko', processors='tokenize,lemma')
+    template_nlp = stanza.Pipeline(lang='ko', processors='depparse,tokenize,pos,lemma', tokenize_pretokenized=True, logging_level='error', use_gpu=True)
+    
+    new_datas = []
+    for idx, data in enumerate(train_datas):
+        token_list = pororo_pipeline(data["ques source 2"], data["ques source 1"], dp, pos, lemma, template_nlp)
+        new_datas.append({'id': data['id'], 'deprel': token_list})
+    for idx, data in enumerate(valid_datas):
+        token_list = pororo_pipeline(data["ques source 2"], data["ques source 1"], dp, pos, lemma, template_nlp)
+        new_datas.append({'id': data['id'], 'deprel': token_list})
+    for idx, data in enumerate(test_datas):
+        token_list = pororo_pipeline(data["ques source 2"], data["ques source 1"], dp, pos, lemma, template_nlp)
+        new_datas.append({'id': data['id'], 'deprel': token_list})
+    write_json_data(new_datas, path)
