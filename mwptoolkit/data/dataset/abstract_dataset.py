@@ -90,6 +90,9 @@ class AbstractDataset(object):
         self.device = config["device"]
         
         self.root = config['root']
+        
+        self.prompt = config['prompt']
+        
         self.max_span_size = 1
 
     def _load_dataset(self):
@@ -119,7 +122,21 @@ class AbstractDataset(object):
 
         if self.dataset in [DatasetName.hmwp]:
             self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset)
-        
+
+        if self.prompt:
+            prompt_file = self.dataset_path + "/prompt.txt"
+            if os.path.isabs(prompt_file):
+                prompt_table = read_prompt_table(prompt_file)
+            else:
+                prompt_table = read_prompt_table(os.path.join(self.root,prompt_file))
+            regex = get_regex_from_from_table(prompt_table)
+            
+            for it in self.trainset:
+                it['Question'] = get_prompt(it['Question'], prompt_table, regex) + it['Question']
+            for it in self.validset:
+                it['Question'] = get_prompt(it['Question'], prompt_table, regex) + it['Question']
+            for it in self.testset:
+                it['Question'] = get_prompt(it['Question'], prompt_table, regex) + it['Question']
 
     def _load_fold_dataset(self):
         """read one fold of dataset from file. 
@@ -304,3 +321,38 @@ class AbstractDataset(object):
 
     def _update_vocab(self, vocab_list):
         raise NotImplementedError
+
+def read_prompt_table(prompt_file_path):
+    with open(prompt_file_path, 'r') as f:
+        table_string = f.read()
+        
+    return read_prompt_table_from_string(table_string)
+        
+from collections import defaultdict
+def read_prompt_table_from_string(table_string):
+    ret = defaultdict(list)
+    
+    all_keywords = []
+    
+    for line in table_string.split('\n'):
+        keywords, sentence = line.split('|')
+        keyword_list = keywords.split(',')
+        
+        ret[tuple(sorted(keyword_list))].append(sentence)
+    
+    return [(set(key), value) for key, value in ret.items()]
+
+import itertools
+def get_regex_from_from_table(table):
+    return re.compile('(' + '|'.join(sorted(set(itertools.chain(*[key for key, _ in table])), key=len)[::-1]) + ')')
+
+import re
+def get_prompt(question, table, regex):
+    question_keyword_set = set(re.findall(regex, question))
+    
+    prompt = ' '.join([' '.join(sentences) for key, sentences in table if key.issubset(question_keyword_set)])
+    
+    if prompt:
+        return prompt
+    else:
+        return ''
