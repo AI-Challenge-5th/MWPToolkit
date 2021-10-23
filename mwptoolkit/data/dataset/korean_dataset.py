@@ -322,6 +322,7 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
         num = str(str2float(num_str))
         source[pos] = num
     source2 = tokenizer.convert_tokens_to_string(source)
+    source = tokenizer.convert_tokens_to_string(input_seq)
     # source = ' '.join(source)
 #     source = ' '.join(source).replace("#", "")
 
@@ -502,7 +503,7 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
 
 
 def is_float_form(group, token):
-    return (len(group) > 0 and str.isdecimal(group[-1][-1]) and token =='.') or \
+    return (len(group) > 0 and str.isdecimal(group[-1][-1]) and token == '.') or \
             (len(group) > 1 and str.isdecimal(group[-2][-1]) and group[-1][-1] == '.' and str.isdecimal(token))
 
 
@@ -557,10 +558,9 @@ def get_token_info(dataset, dp, pos, tokenizer):
         question_list = []
         # question = tokenizer.convert_tokens_to_string(data["question"])
         # q, num_list = transfer_digit_to_num(question)   # input은 변경 가능
-        q = data['ques source 2']
         tr = group_sub_tokens(data["question"])
-        dpr = dp(sentence_preprocess_dp(q))
-        pr = group_pos(pos(q))
+        dpr = dp(sentence_preprocess_dp(data['ques source 1']))
+        pr = group_pos(pos(data['ques source 2']))
 
         #잘못된 데이터 들어오면
         if len(tr) != len(dpr) or len(tr) != len(pr):
