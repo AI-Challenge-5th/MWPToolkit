@@ -92,6 +92,7 @@ class AbstractDataset(object):
         self.root = config['root']
         
         self.prompt = config['prompt']
+        self.mapping = config['mapping']
         
         self.max_span_size = 1
 
@@ -123,6 +124,21 @@ class AbstractDataset(object):
         if self.dataset in [DatasetName.hmwp]:
             self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset)
 
+        if self.mapping:
+            mapping_file = self.dataset_path + '/mapping.txt'
+            if os.path.isabs(mapping_file):
+                mapping_table = read_mapping_table(mapping_file)
+            else:
+                mapping_table = read_mapping_table(os.path.join(self.root,mapping_file))
+            
+            
+            for it in self.trainset:
+                it['Question'] = mapping(it['Question'], mapping_table)
+            for it in self.validset:
+                it['Question'] = mapping(it['Question'], mapping_table)
+            for it in self.testset:
+                it['Question'] = mapping(it['Question'], mapping_table)
+                        
         if self.prompt:
             prompt_file = self.dataset_path + "/prompt.txt"
             if os.path.isabs(prompt_file):
@@ -332,8 +348,6 @@ from collections import defaultdict
 def read_prompt_table_from_string(table_string):
     ret = defaultdict(list)
     
-    all_keywords = []
-    
     for line in table_string.split('\n'):
         keywords, sentence = line.split('|')
         keyword_list = keywords.split(',')
@@ -356,3 +370,29 @@ def get_prompt(question, table, regex):
         return prompt
     else:
         return ''
+    
+def read_mapping_table(mapping_file_path):
+    with open(mapping_file_path, 'r') as f:
+        table_string = f.read()
+        
+    return read_mapping_table_from_string(table_string)
+        
+from collections import defaultdict
+def read_mapping_table_from_string(table_string):
+    ret = defaultdict(list)
+    
+    all_keywords = []
+    
+    for line in table_string.split('\n'):
+        keywords, mapped = line.split('|')
+        keyword_list = keywords.split(',')
+        
+        for keyword in keyword_list:
+            all_keywords.append((keyword, mapped))
+
+    return all_keywords
+
+def mapping(sentence, mapping_table):
+    for keyword, mapped in mapping_table:
+        sentence = sentence.replace(keyword, mapped)
+    return sentence
