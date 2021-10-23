@@ -33,8 +33,15 @@ class KoreanRobertaDataset(PretrainDataset):
     def __init__(self, config):
         super().__init__(config)
         self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
-        special_tokens_dict = {'additional_special_tokens': ["NUM"]}
-        self.tokenizer.add_special_tokens(special_tokens_dict)
+
+        self.pre_mask = config['pre_mask']
+        additional_mask_symbols = {self.mask_symbol, self.pre_mask}
+        if MaskSymbol.NUM in additional_mask_symbols:
+            self.tokenizer.add_special_tokens(dict(additional_special_tokens=['NUM']))
+        if MaskSymbol.alphabet in additional_mask_symbols:
+            self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.alphabet))
+        if MaskSymbol.number in additional_mask_symbols:
+            self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.number))
 
     def _preprocess(self):
         if self.dataset in [DatasetName.hmwp]:
@@ -43,11 +50,12 @@ class KoreanRobertaDataset(PretrainDataset):
         self.trainset, self.validset, self.testset = ID_reedit(self.trainset, self.validset, self.testset)
         self.trainset, generate_list, train_copy_nums, unk_symbol = transfer(self.trainset, self.dataset,
                                                                              self.task_type, self.mask_symbol,
-                                                                             self.min_generate_keep, self.tokenizer, ";")
+                                                                             self.min_generate_keep, self.tokenizer,
+                                                                             self.pre_mask, ";")
         self.validset, _g, valid_copy_nums, _ = transfer(self.validset, self.dataset, self.task_type, self.mask_symbol,
-                                                         self.min_generate_keep, self.tokenizer, ";")
+                                                         self.min_generate_keep, self.tokenizer, self.pre_mask, ";")
         self.testset, _g, test_copy_nums, _ = transfer(self.testset, self.dataset, self.task_type, self.mask_symbol,
-                                                       self.min_generate_keep, self.tokenizer, ";")
+                                                       self.min_generate_keep, self.tokenizer, self.pre_mask, ";")
 
         target_equation_fix = self.equation_fix if self.equation_fix else FixType.Infix
         source_equation_fix = self.source_equation_fix if self.source_equation_fix else FixType.Infix
@@ -108,57 +116,108 @@ class KoreanRobertaDataset(PretrainDataset):
 
         # graph preprocess
         use_gpu = True if self.device == torch.device('cuda') else False
-        if self.model.lower() in ['graph2treeibm']:
-            if os.path.exists(self.parse_tree_path) and not self.rebuild:
-                logger = getLogger()
-                logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
-                self.trainset, self.validset, self.testset, token_list = \
-                    get_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
-            else:
-                logger = getLogger()
-                logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
-                
-                deprel_tree_to_file(self.trainset, self.validset, self.testset, \
-                                    self.parse_tree_path, self.language, use_gpu)
-                self.trainset, self.validset, self.testset, token_list = \
-                    get_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
-        if self.model.lower() in ['hms']:
-            if os.path.exists(self.parse_tree_path) and not self.rebuild:
-                logger = getLogger()
-                logger.info("read span-level deprel tree infomation from {} ...".format(self.parse_tree_path))
-                self.trainset, self.validset, self.testset, self.max_span_size = \
-                    get_span_level_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
-            else:
-                logger = getLogger()
-                logger.info("build span-level deprel tree infomation to {} ...".format(self.parse_tree_path))
-                span_level_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
-                                               self.parse_tree_path, self.language, use_gpu)
-                self.trainset, self.validset, self.testset, self.max_span_size = \
-                    get_span_level_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
-        if self.model.lower() in ['graph2tree']:
+        # if self.model.lower() in ['graph2treeibm']:
+        #     if os.path.exists(self.parse_tree_path) and not self.rebuild:
+        #         logger = getLogger()
+        #         logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
+        #         self.trainset, self.validset, self.testset, token_list = \
+        #             get_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        #     else:
+        #         logger = getLogger()
+        #         logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
+        #         deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+        #                             self.parse_tree_path, self.language, use_gpu)
+        #         self.trainset, self.validset, self.testset, token_list = \
+        #             get_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        # if self.model.lower() in ['hms']:
+        #     if os.path.exists(self.parse_tree_path) and not self.rebuild:
+        #         logger = getLogger()
+        #         logger.info("read span-level deprel tree infomation from {} ...".format(self.parse_tree_path))
+        #         self.trainset, self.validset, self.testset, self.max_span_size = \
+        #             get_span_level_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        #     else:
+        #         logger = getLogger()
+        #         logger.info("build span-level deprel tree infomation to {} ...".format(self.parse_tree_path))
+        #         span_level_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+        #                                        self.parse_tree_path, self.language, use_gpu)
+        #         self.trainset, self.validset, self.testset, self.max_span_size = \
+        #             get_span_level_deprel_tree_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        # if self.model.lower() in ['graph2tree']:
+        #     if os.path.exists(self.parse_tree_path) and not self.rebuild:
+        #         logger = getLogger()
+        #         logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
+        #         self.trainset, self.validset, self.testset = \
+        #             get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        #     else:
+        #         logger = getLogger()
+        #         logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
+        #         deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+        #                             self.parse_tree_path, self.language, use_gpu)
+        #         self.trainset, self.validset, self.testset = \
+        #             get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+
+        # if self.model.lower() in ['graph2tree']:
+        #     logger = getLogger()
+        #     logger.info("build kor deprel tree infomation to {} ...".format(self.parse_tree_path))
+        #     q_infos = kor_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+        #                             self.parse_tree_path, self.tokenizer, use_gpu)
+        #     self.trainset, self.validset, self.testset = \
+        #             kor_get_group_nums_(self.trainset, self.validset, self.testset, q_infos)
+
+        if os.path.exists(self.parse_tree_path) and not self.rebuild:
             logger = getLogger()
-            logger.info("build kor deprel tree infomation to {} ...".format(self.parse_tree_path))
-            q_infos = kor_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
-                                    self.parse_tree_path, self.tokenizer, use_gpu)
+            logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
             self.trainset, self.validset, self.testset = \
-                    kor_get_group_nums_(self.trainset, self.validset, self.testset, q_infos)
-#             self.parse_tree_path = "deprel_tree_info"
-#             if os.path.exists(self.parse_tree_path) and not self.rebuild:
-#                 logger = getLogger()
-#                 logger.info("read kor deprel tree infomation from {} ...".format(self.parse_tree_path))
-#                 self.trainset, self.validset, self.testset = \
-#                     kor_get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
-#             else:
-#                 logger = getLogger()
-#                 logger.info("build kor deprel tree infomation to {} ...".format(self.parse_tree_path))
-#                 kor_deprel_tree_to_file(self.trainset, self.validset, self.testset, \
-#                                     self.parse_tree_path, self.tokenizer, use_gpu)
-#                 self.trainset, self.validset, self.testset = \
-#                     kor_get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                # get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        else:
+            logger = getLogger()
+            logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
+            # deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, \
+            deprel_tree_to_file(self.trainset, self.validset, self.testset, \
+                                self.parse_tree_path, self.language, use_gpu)
+            self.trainset, self.validset, self.testset = \
+                get_group_nums_(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                # get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+
+    def _build_vocab(self):
+        tokenizer = self.tokenizer
+
+        if self.model.lower() in ['trnn']:
+            tokenizer.add_tokens(self.generate_list)
+        global SpecialTokens
+        SpecialTokens.PAD_TOKEN=tokenizer.pad_token
+        SpecialTokens.SOS_TOKEN=tokenizer.bos_token
+        SpecialTokens.EOS_TOKEN=tokenizer.eos_token
+        SpecialTokens.UNK_TOKEN=tokenizer.unk_token
+        if self.embedding == 'bert':
+            SpecialTokens.SOS_TOKEN=tokenizer.cls_token
+            SpecialTokens.EOS_TOKEN=tokenizer.sep_token
+        self.tokenizer=tokenizer
+        self.in_idx2word = list(tokenizer.get_vocab().keys())
+
+        if self.symbol_for_tree:
+            self._build_symbol_for_tree()
+            self._build_template_symbol_for_tree()
+        elif self.equation_fix == FixType.MultiWayTree:
+            self._build_symbol_for_multi_way_tree()
+            self._build_template_symbol_for_multi_way_tree()
+        else:
+            self._build_symbol()
+            self._build_template_symbol()
+
+        self.in_word2idx = {}
+        self.out_symbol2idx = {}
+        self.temp_symbol2idx = {}
+        for idx, word in enumerate(self.in_idx2word):
+            self.in_word2idx[word] = idx
+        for idx, symbol in enumerate(self.out_idx2symbol):
+            self.out_symbol2idx[symbol] = idx
+        for idx, symbol in enumerate(self.temp_idx2symbol):
+            self.temp_symbol2idx[symbol] = idx
 
 
-
-def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_keep, tokenizer, equ_split_symbol=';'):
+def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_keep, tokenizer, pre_mask, equ_split_symbol=';'):
     """number transfer
 
     Args:
@@ -167,13 +226,15 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
         task_type (str): [single_equation | multi_equation], task type.
         min_generate_keep (int): generate number that count greater than the value, will be kept in output symbols.
         equ_split_symbol (str): equation split symbol, in multiple-equation dataset, symbol to split equations, this symbol will be repalced with special token SpecialTokens.BRG.
+        tokenizer (BertTokenizer): tokenizer for korean text.
+        pre_mask (str): mask symbol which was applied to input sequence before.
 
     Returns:
         tuple(list,list,int,list):
         processed datas, generate number list, copy number, unk symbol list.
     """
-#     transfer = _num_transfer_kor
-    transfer = _num_transfer_transformer
+    transfer = _num_transfer_kor
+    # transfer = _num_transfer_transformer
 
     generate_nums = []
     generate_nums_dict = {}
@@ -182,9 +243,9 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     unk_symbol = []
     for data in datas:
         if task_type == TaskType.SingleEquation:
-            new_data = transfer(data, tokenizer, mask_type)
+            new_data = transfer(data, tokenizer, mask_type, pre_mask)
         elif task_type == TaskType.MultiEquation:
-            new_data = transfer(data, tokenizer, mask_type, equ_split_symbol)
+            new_data = transfer(data, tokenizer, mask_type, pre_mask, equ_split_symbol)
         else:
             raise NotImplementedError
         if dataset_name == DatasetName.mawps_single and task_type == TaskType.SingleEquation and '=' in new_data["equation"]:
@@ -229,11 +290,11 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     return processed_datas, generate_number, copy_nums, unk_symbol
 
 
-def _num_transfer_kor(data, tokenizer, mask_type):
+def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
     pattern = re.compile("\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
 
     nums = OrderedDict()
-    num_list = []
+    num_list = data['Numbers'].split() if pre_mask is not None else []
     input_seq = []
     seg = tokenizer.tokenize(data['Question'])
     equations = data['Equation']
@@ -252,9 +313,13 @@ def _num_transfer_kor(data, tokenizer, mask_type):
         else:
             input_seq.append(s)
 
-    input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = get_num_pos(input_seq, mask_type, pattern)
+    if pre_mask is not None:
+        input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask)
+    else:
+        input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = get_num_pos(input_seq, mask_type, pattern)
 
     out_seq = seg_and_tag_svamp(equations, nums_fraction, nums)
+
     source = copy.deepcopy(input_seq)
     for pos in all_pos:
         for key, value in num_pos_dict.items():
@@ -263,7 +328,7 @@ def _num_transfer_kor(data, tokenizer, mask_type):
                 break
         num = str(str2float(num_str))
         source[pos] = num
-    source2 = tokenizer.convert_tokens_to_string(source)   
+    source2 = tokenizer.convert_tokens_to_string(source)
     source = ' '.join(source)
 #     source = ' '.join(source).replace("#", "")
 
@@ -309,10 +374,10 @@ def transfer_digit_to_num(question):
 
 
 def kor_get_num_pos(input_seq, num_list):
-    
+
     sent_mask_list = NumMask.NUM
     equ_mask_list = NumMask.number
-    
+
     pattern = re.compile("NUM")
     nums = OrderedDict()
     num_idx = 0
@@ -342,20 +407,20 @@ def kor_get_num_pos(input_seq, num_list):
             pass
     nums = lists2dict(new_num_list, new_mask_list)
     nums_for_ques = lists2dict(num_list, sent_mask_list[:len(num_list)])
-    
+
     # all number position
     all_pos = []
     all_pos = copy.deepcopy(num_pos)
     # final numbor position
     final_pos = []
     final_pos = copy.deepcopy(num_pos)
-    
+
     nums_fraction = []
     for num, mask in nums.items():
         if re.search("\d*\(\d+/\d+\)\d*", num):
             nums_fraction.append(num)
     nums_fraction = sorted(nums_fraction, key=lambda x: len(x), reverse=True)
-    
+
     return input_seq, num_list, final_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction
 
 
@@ -365,7 +430,7 @@ def kor_deprel_tree_to_file(trainset, validset, testset, parse_tree_path, tokeni
     pos = Pororo(task='pos', lang='ko')
     print("dataset length , ", len(trainset), len(validset), len(testset) )
     questions_infos['trainset'] = get_token_info(trainset, dp, pos, tokenizer)
-    questions_infos['validset'] = get_token_info(validset, dp, pos, tokenizer)    
+    questions_infos['validset'] = get_token_info(validset, dp, pos, tokenizer)
     questions_infos['testset'] = get_token_info(testset, dp, pos, tokenizer)
 #     with open(parse_tree_path , 'wb') as f:
 #         pickle.dump(parse_tree_path+".pkl", f)
@@ -425,9 +490,9 @@ def sentence_preprocess_dp(sentence):
     result = ''
     for idx in range(len(sentence)):
         cur_char = sentence[idx]
-        if idx > 0 and cur_char in decimal:                
+        if idx > 0 and cur_char in decimal:
             pre_char = sentence[idx-1]
-            
+
             if idx < len(sentence)-1:
                 next_char = sentence[idx+1]
                 if not next_char.isdigit():
@@ -435,7 +500,7 @@ def sentence_preprocess_dp(sentence):
             elif not pre_char.isdigit():
                 result += " "
         result += cur_char
-        
+
     return result
 
 
@@ -450,14 +515,14 @@ def get_token_info(dataset, dp, pos, tokenizer):
         tr = group_sub_tokens(data["question"])
         dpr = dp(sentence_preprocess_dp(q))
         pr = group_pos(pos(q))
-        
+
         #잘못된 데이터 들어오면
         if len(tr) != len(dpr) or len(tr) != len(pr):
             print('grouping fail!')
             if len(tr) != len(dpr):
                 n = len(tr) - len(dpr)
                 dpr += dpr[-n:]
-            
+
             if len(tr) != len(pr):
                 n = len(tr) - len(pr)
                 pr += pr[-n:]
@@ -472,10 +537,10 @@ def get_token_info(dataset, dp, pos, tokenizer):
                 question_info['head']=d_group[2]
                 question_info['dep_pos']=d_group[0]
                 question_list.append(question_info)
-            
-        questions_info[data['id']] =  question_list 
-            
-            
+
+        questions_info[data['id']] =  question_list
+
+
     return questions_info
 
 
@@ -485,7 +550,7 @@ def kor_get_group_nums_(trainset, validset, testset, q_infos):
 #         q_infos = pickle.load(f)
     print(len(q_infos['trainset']),len(q_infos['validset']),len(q_infos['testset']) )
     trainset = get_group_num(trainset, q_infos['trainset'])
-    validset = get_group_num(validset, q_infos['validset'])    
+    validset = get_group_num(validset, q_infos['validset'])
     testset = get_group_num(testset, q_infos['testset'])
     return trainset, validset, testset
 
@@ -499,7 +564,7 @@ def get_group_num(dataset, q_info):
     'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
     'SN',  # quantities
     }
-    
+
     for data in dataset:
         question_id = data["id"]
         num_pos = data["number position"]
@@ -508,13 +573,13 @@ def get_group_num(dataset, q_info):
 #         print(data)
 #         print(info)
 #         print(num_pos, len(info))
-        
+
         dep_pos, dep_info, dep_head = get_dprel_info(info)
         sent_len = len(dep_pos)
         for token_npos in num_pos:
             npos = info[token_npos]['dep_pos']
             pos_stack = []
-            group_num = []            
+            group_num = []
             pos_stack.append(dep_head[npos-1])
             level = 0
             while pos_stack:
@@ -539,7 +604,7 @@ def get_group_num(dataset, q_info):
                                 #group_num에 토큰 없고 and valid_tags 있어야함
                                 if token_pos not in group_num and info[token_pos]["pos"] in valid_tags:
                                     group_num.append(token_pos)
-                    # next head        
+                    # next head
                     pos_stack.append(dep_head[head-1])
             if group_num == []:
                     group_num += dep_pos[npos-1]
@@ -563,7 +628,7 @@ def get_dprel_info(q_info):
         dep_info[info['dep_pos']-1] = info['deprel']
         dep_head[info['dep_pos']-1] = info['head']
     return dep_pos, dep_info, dep_head
-    
+
 
 
 def _num_transfer_transformer(data, tokenizer, mask_type):
@@ -573,7 +638,7 @@ def _num_transfer_transformer(data, tokenizer, mask_type):
     equations = data['Equation']
     if equations.startswith('( ') and equations.endswith(' )'):
         equations = equations[2:-2]
-        
+
 
     input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = kor_get_num_pos(input_seq, num_list)
 
@@ -599,7 +664,115 @@ def _num_transfer_transformer(data, tokenizer, mask_type):
 
     return new_data
 
-# +
+
+def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
+    if pre_mask == MaskSymbol.NUM:
+        pattern = re.compile('NUM')
+    if pre_mask == MaskSymbol.alphabet:
+        # pattern = re.compile('number_[A-Za-z]+')
+        pattern = re.compile('NUM_[A-Za-z]+')
+    if pre_mask == MaskSymbol.number:
+        # pattern = re.compile('number[0-9]+')
+        pattern = re.compile('NUM_([0-9]+)')
+
+    if mask_type == MaskSymbol.NUM:
+        sent_mask_list = NumMask.NUM
+        equ_mask_list = NumMask.number
+    elif mask_type == MaskSymbol.alphabet:
+        sent_mask_list = NumMask.alphabet
+        equ_mask_list = NumMask.alphabet
+    elif mask_type == MaskSymbol.number:
+        sent_mask_list = NumMask.number
+        equ_mask_list = NumMask.number
+    nums = OrderedDict()
+    num_pos = []
+    num_pos_dict = {}
+
+    if mask_type == MaskSymbol.NUM:
+        # find all number position
+        for word_pos, word in enumerate(input_seq):
+            pos = re.search(pattern, word)
+            if pos and pos.start() == 0:
+                num_idx = int(pos.groups()[0])
+                # num_list.append(word)
+                word = num_list[num_idx]
+                num_pos.append(word_pos)
+                if word in num_pos_dict:
+                    num_pos_dict[word].append(word_pos)
+                else:
+                    num_pos_dict[word] = [word_pos]
+
+        mask_list = equ_mask_list[:len(num_list)]
+        new_num_list = []
+        new_mask_list = []
+        for i in num_list:
+            if num_list.count(i) != 1:
+                x = 1
+            if num_list.count(i) == 1:
+                new_num_list.append(i)
+                new_mask_list.append(mask_list[num_list.index(i)])
+            else:
+                pass
+        nums = lists2dict(new_num_list, new_mask_list)
+    else:
+        # find all number position
+        for word_pos, word in enumerate(input_seq):
+            pos = re.search(pattern, word)
+            if pos and pos.start() == 0:
+                num_idx = int(pos.groups()[0])
+                word = num_list[num_idx]
+                if word in num_pos_dict:
+                    num_pos_dict[word].append(word_pos)
+                else:
+                    # num_list.append(word)
+                    num_pos_dict[word] = [word_pos]
+        num_list = sorted(num_list, key=lambda x: max(num_pos_dict[x]), reverse=False)
+        nums = lists2dict(num_list, equ_mask_list[:len(num_list)])
+
+    nums_for_ques = lists2dict(num_list, sent_mask_list[:len(num_list)])
+
+    # all number position
+    all_pos = []
+    if mask_type == MaskSymbol.NUM:
+        all_pos = copy.deepcopy(num_pos)
+    else:
+        for num, mask in nums_for_ques.items():
+            for pos in num_pos_dict[num]:
+                all_pos.append(pos)
+
+    # final numbor position
+    final_pos = []
+    if mask_type == MaskSymbol.NUM:
+        final_pos = copy.deepcopy(num_pos)
+    else:
+        for num in num_list:
+            # select the latest position as the number position
+            # if the number corresponds multiple positions
+            final_pos.append(max(num_pos_dict[num]))
+
+    # number transform
+    for num, mask in nums_for_ques.items():
+        if num in num_pos_dict:
+            for pos in num_pos_dict[num]:
+                input_seq[pos] = mask
+        else:
+            print(num, num_list, num_pos_dict, input_seq)
+
+    nums_fraction = []
+    for num, mask in nums.items():
+        if re.search("\d*\(\d+/\d+\)\d*", num):
+            nums_fraction.append(num)
+    nums_fraction = sorted(nums_fraction, key=lambda x: len(x), reverse=True)
+
+    return input_seq, num_list, final_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction
+
+
+def deprel_tree_to_file_kor(train_datas, valid_datas, test_datas, path, language, use_gpu):
+    raise NotImplementedError
+
+
+def get_group_nums_kor(train_datas, valid_datas, test_datas, path):
+    raise NotImplementedError
 
 
 def pororo_pipeline(question, token_question, dp, pos, lemma, template_nlp):
@@ -611,7 +784,7 @@ def pororo_pipeline(question, token_question, dp, pos, lemma, template_nlp):
 
     depenp_idx = 0
     # pos_idx = 0
-#     lemma_idx = 0
+    #     lemma_idx = 0
     sentence_lemma_idx = 0
     current_word_for_depenp = ''
     # current_word_for_pos = ''
@@ -624,38 +797,39 @@ def pororo_pipeline(question, token_question, dp, pos, lemma, template_nlp):
 
         for token in current_sentence:
             new_token = copy.deepcopy(token)
-            current_word_for_depenp += token['text'].replace("#","")
-    #         current_word_for_pos += token['text'].replace("#","")
-    #         current_word_for_lemma += token['text'].replace("#","")
-            new_token['deprel']=depenp[depenp_idx][3]
-    #         new_token['lemma']=lemma_doc[sentence_lemma_idx][lemma_idx]['lemma']
+            current_word_for_depenp += token['text'].replace("#", "")
+            #         current_word_for_pos += token['text'].replace("#","")
+            #         current_word_for_lemma += token['text'].replace("#","")
+            new_token['deprel'] = depenp[depenp_idx][3]
+            #         new_token['lemma']=lemma_doc[sentence_lemma_idx][lemma_idx]['lemma']
             new_sentence.append(new_token)
 
-            if current_word_for_depenp == depenp[depenp_idx][1] or len(current_word_for_depenp) > len(depenp[depenp_idx][1]):
+            if current_word_for_depenp == depenp[depenp_idx][1] or len(current_word_for_depenp) > len(
+                    depenp[depenp_idx][1]):
                 current_word_for_depenp = ''
                 depenp_idx += 1
 
-    #         if current_word_for_pos == pos_sentence[pos_idx][0] or len(current_word_for_pos) > len(pos_sentence[pos_idx][0]):
-    #             current_word_for_pos = ''
-    #             pos_idx +=1
+        #         if current_word_for_pos == pos_sentence[pos_idx][0] or len(current_word_for_pos) > len(pos_sentence[pos_idx][0]):
+        #             current_word_for_pos = ''
+        #             pos_idx +=1
 
-    #         if current_word_for_lemma == lemma_doc[sentence_lemma_idx][lemma_idx]['text'] or len(current_word_for_lemma) > len(lemma_doc[sentence_lemma_idx][lemma_idx]['text']):
-    #             current_word_for_lemma = ''
+        #         if current_word_for_lemma == lemma_doc[sentence_lemma_idx][lemma_idx]['text'] or len(current_word_for_lemma) > len(lemma_doc[sentence_lemma_idx][lemma_idx]['text']):
+        #             current_word_for_lemma = ''
 
-    #             lemma_idx += 1
-    #             if lemma_idx >= len(lemma_doc[sentence_lemma_idx]):
-    #                 sentence_lemma_idx += 1
-    #                 lemma_idx = 0
+        #             lemma_idx += 1
+        #             if lemma_idx >= len(lemma_doc[sentence_lemma_idx]):
+        #                 sentence_lemma_idx += 1
+        #                 lemma_idx = 0
         new_doc.append(new_sentence)
     return new_doc
 
-    
+
 def kor_deprel_tree_to_file_(train_datas, valid_datas, test_datas, path, language, use_gpu):
     dp = Pororo(task="dep_parse", lang="ko")
     pos = Pororo(task="pos", lang="ko")
     lemma = stanza.Pipeline(lang='ko', processors='tokenize,lemma')
     template_nlp = stanza.Pipeline(lang='ko', processors='depparse,tokenize,pos,lemma', tokenize_pretokenized=True, logging_level='error', use_gpu=True)
-    
+
     new_datas = []
     for idx, data in enumerate(train_datas):
         token_list = pororo_pipeline(data["ques source 2"], data["ques source 1"], dp, pos, lemma, template_nlp)

@@ -72,12 +72,16 @@ class Graph2Tree(nn.Module):
         #module
         if config['embedding'] == 'roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         elif config['embedding'] == 'ko-roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         elif config['embedding'] == 'koelectra':
             self.embedder = KoElectraEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         else:
             self.embedder = BaiscEmbedder(self.vocab_size, self.embedding_size, self.dropout_ratio)
         self.encoder=GraphBasedEncoder(self.embedding_size,self.hidden_size,self.rnn_cell_type,\
