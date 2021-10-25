@@ -461,7 +461,7 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
                 else:
                     # num_list.append(word)
                     num_pos_dict[word] = [word_pos]
-        num_list = sorted(num_list, key=lambda x: max(num_pos_dict[x]), reverse=False)
+        # num_list = sorted(num_list, key=lambda x: max(num_pos_dict[x]), reverse=False)
         nums = lists2dict(num_list, equ_mask_list[:len(num_list)])
 
     nums_for_ques = lists2dict(num_list, sent_mask_list[:len(num_list)])
@@ -472,8 +472,9 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
         all_pos = copy.deepcopy(num_pos)
     else:
         for num, mask in nums_for_ques.items():
-            for pos in num_pos_dict[num]:
-                all_pos.append(pos)
+            if num in num_pos_dict:
+                for pos in num_pos_dict[num]:
+                    all_pos.append(pos)
 
     # final numbor position
     final_pos = []
@@ -481,6 +482,8 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
         final_pos = copy.deepcopy(num_pos)
     else:
         for num in num_list:
+            if num not in num_pos_dict:
+                continue
             # select the latest position as the number position
             # if the number corresponds multiple positions
             final_pos.append(max(num_pos_dict[num]))
@@ -514,6 +517,12 @@ def is_special_token(group, token):
            (len(group) > 1 and group[-2][1] == '[' and group[-1][1] in special_tokens and token == ']')
 
 
+def is_num_token(group, token):
+    return (token == 'NUM') or \
+           (len(group) > 0 and group[-1][1] == 'NUM' and token == '_') or \
+           (len(group) > 1 and group[-2][1] == 'NUM' and group[-1][1] == '_' and str.isdecimal(token))
+
+
 def group_sub_tokens(tokens):
     token_group = []
     group = []
@@ -534,7 +543,10 @@ def group_pos(pos_list):
         t, p = pos
         if t.startswith('\u200b'):
             continue
-        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'} and not is_float_form(group, t) and not is_special_token(group, t):
+        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'} \
+                and not is_float_form(group, t) \
+                and not is_special_token(group, t) \
+                and not is_num_token(group, t):
             if len(group) > 0:
                 pos_group.append(group)
             if p != 'SPACE':
