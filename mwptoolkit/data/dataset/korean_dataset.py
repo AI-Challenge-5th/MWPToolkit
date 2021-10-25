@@ -510,7 +510,7 @@ def is_float_form(group, token):
 def is_special_token(group, token):
     special_tokens = {'CLS', 'SEP', 'UNK', 'PAD', 'MASK'}
     return (token == '[') or \
-           (len(group) > 0 and group[-2][1] == '[' and token in special_tokens) or \
+           (len(group) > 0 and group[-1][1] == '[' and token in special_tokens) or \
            (len(group) > 1 and group[-2][1] == '[' and group[-1][1] in special_tokens and token == ']')
 
 
