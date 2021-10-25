@@ -45,7 +45,7 @@ class KoreanRobertaDataset(PretrainDataset):
 
     def _preprocess(self):
         if self.dataset in [DatasetName.hmwp]:
-            self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset)
+            self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
         transfer = number_transfer_kor
 
         self.trainset, generate_list, train_copy_nums, unk_symbol = transfer(self.trainset, self.dataset,
@@ -333,7 +333,7 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
     new_data["equation"] = out_seq
     new_data["number list"] = num_list
     new_data["number position"] = num_pos
-    new_data["id"] = data["ID"]
+    new_data["id"] = str(data["ID"])
     new_data["ans"] = data["Answer"]
 
     return new_data
@@ -394,7 +394,7 @@ def _num_transfer_transformer(data, tokenizer, mask_type, pre_mask='NUM'):
     new_data["equation"] = out_seq
     new_data["number list"] = num_list
     new_data["number position"] = num_pos
-    new_data["id"] = data["ID"]
+    new_data["id"] = str(data["ID"])
     new_data["ans"] = data["Answer"]
 
     return new_data
@@ -503,8 +503,15 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
 
 
 def is_float_form(group, token):
-    return (len(group) > 0 and str.isdecimal(group[-1][-1]) and token == '.') or \
-            (len(group) > 1 and str.isdecimal(group[-2][-1]) and group[-1][-1] == '.' and str.isdecimal(token))
+    return (len(group) > 0 and str.isdecimal(group[-1][1]) and token == '.') or \
+           (len(group) > 1 and str.isdecimal(group[-2][1]) and group[-1][1] == '.' and str.isdecimal(token))
+
+
+def is_special_token(group, token):
+    special_tokens = {'CLS', 'SEP', 'UNK', 'PAD', 'MASK'}
+    return (token == '[') or \
+           (len(group) > 0 and group[-2][1] == '[' and token in special_tokens) or \
+           (len(group) > 1 and group[-2][1] == '[' and group[-1][1] in special_tokens and token == ']')
 
 
 def group_sub_tokens(tokens):
@@ -527,7 +534,7 @@ def group_pos(pos_list):
         t, p = pos
         if t.startswith('\u200b'):
             continue
-        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'}:
+        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'} and not is_float_form(group, t) and not is_special_token(group, t):
             if len(group) > 0:
                 pos_group.append(group)
             if p != 'SPACE':
@@ -559,8 +566,8 @@ def get_token_info(dataset, dp, pos, tokenizer):
         # question = tokenizer.convert_tokens_to_string(data["question"])
         # q, num_list = transfer_digit_to_num(question)   # input은 변경 가능
         tr = group_sub_tokens(data["question"])
-        dpr = dp(sentence_preprocess_dp(data['ques source 1']))
-        pr = group_pos(pos(data['ques source 2']))
+        dpr = dp(sentence_preprocess_dp(data['ques source 2']))
+        pr = group_pos(pos(data['ques source 1']))
 
         #잘못된 데이터 들어오면
         if len(tr) != len(dpr) or len(tr) != len(pr):
@@ -585,7 +592,7 @@ def get_token_info(dataset, dp, pos, tokenizer):
                 }
                 question_list.append(question_info)
 
-        questions_info[data['id']] = question_list
+        questions_info[str(data['id'])] = question_list
 
     return questions_info
 
@@ -626,7 +633,7 @@ def get_group_num(dataset, q_info):
     }
 
     for data in dataset:
-        question_id = data["id"]
+        question_id = str(data["id"])
         num_pos = data["number position"]
         group_nums = []
         info = q_info[question_id]

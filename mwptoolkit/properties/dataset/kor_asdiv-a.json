@@ -2,7 +2,7 @@
     "min_word_keep":5,
     "min_generate_keep":5,
     "validset_divide":true,
-    "mask_symbol":"number",
+    "mask_symbol":"NUM",
     "pre_mask":"number",
     "max_output_len":30,
     "single":true,
