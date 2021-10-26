@@ -48,6 +48,10 @@ def init_logger(config):
     sh.setLevel(level)
     sh.setFormatter(sformatter)
 
+    # Remove all handlers associated with the root logger object.
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     logging.basicConfig(
         level=level,
         handlers=[fh, sh]

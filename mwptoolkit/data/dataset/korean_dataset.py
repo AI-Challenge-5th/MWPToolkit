@@ -43,6 +43,12 @@ class KoreanRobertaDataset(PretrainDataset):
         if MaskSymbol.number in additional_mask_symbols:
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.number))
 
+        func_group_num_table = {
+            'dep': get_group_num_by_dep,
+            'pos': get_group_num_by_pos,
+        }
+        self.get_group_num = func_group_num_table[config['get_group_num']]
+
     def _preprocess(self):
         if self.dataset in [DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
@@ -168,13 +174,13 @@ class KoreanRobertaDataset(PretrainDataset):
             logger = getLogger()
             logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
             self.trainset, self.validset, self.testset = \
-                get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
         else:
             logger = getLogger()
             logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
             deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
             self.trainset, self.validset, self.testset = \
-                get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
 
     def _build_vocab(self):
         tokenizer = self.tokenizer
@@ -628,20 +634,57 @@ def sentence_preprocess_dp(sentence):
     return result
 
 
-def get_group_nums_kor(train_datas, valid_datas, test_datas, path):
+def get_group_nums_kor(func_group_num, train_datas, valid_datas, test_datas, path):
     q_infos = read_json_data(path)
-    trainset = get_group_num(train_datas, q_infos['trainset'])
-    validset = get_group_num(valid_datas, q_infos['validset'])
-    testset = get_group_num(test_datas, q_infos['testset'])
+    trainset = func_group_num(train_datas, q_infos['trainset'])
+    validset = func_group_num(valid_datas, q_infos['validset'])
+    testset = func_group_num(test_datas, q_infos['testset'])
     return trainset, validset, testset
 
 
-def get_group_num(dataset, q_info):
+def get_group_num_by_pos(dataset, q_info):
     valid_tags = {
-    'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
-    'MM',  # adjectives
-    'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
-    'SN',  # quantities
+        'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
+        'MM', 'MAG',  # adjectives
+        'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
+        'SN',  # quantities
+    }
+
+    for data in dataset:
+        question_id = str(data["id"])
+        num_pos = data["number position"]
+        group_nums = []
+        info = q_info[question_id]
+
+        sent_start_pos = [-1] + [i for i, x in enumerate(info) if x['pos'] == 'SF']
+        sent_end_pos = [i for i, x in enumerate(info) if x['pos'] == 'SF'] + [len(info)]
+        se_pos_set = {(s, e): False for s, e in zip(sent_start_pos, sent_end_pos)}
+        for token_npos in num_pos:
+            group_num = []
+            start = max([x for x in sent_start_pos if x < token_npos])
+            end = min([x for x in sent_end_pos if x > token_npos])
+            se_pos_set[(start, end)] = True
+            for token in info[start+1:end]:
+                if not token['token'].startswith('##') and token['pos'] in valid_tags:
+                    group_num.append(token['token_pos'])
+            group_nums.append(group_num)
+        common_group_num = []
+        for (start, end), is_used in se_pos_set.items():
+            if not is_used:
+                for token in info[start+1:end]:
+                    if not token['token'].startswith('##') and token['pos'] in valid_tags:
+                        common_group_num.append(token['token_pos'])
+        group_nums = [x + common_group_num for x in group_nums]
+        data["group nums"] = group_nums
+    return dataset
+
+
+def get_group_num_by_dep(dataset, q_info):
+    valid_tags = {
+        'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
+        'MM', 'MAG',  # adjectives
+        'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
+        'SN',  # quantities
     }
 
     for data in dataset:
