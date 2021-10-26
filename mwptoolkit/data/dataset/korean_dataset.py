@@ -42,8 +42,21 @@ class KoreanRobertaDataset(PretrainDataset):
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.alphabet))
         if MaskSymbol.number in additional_mask_symbols:
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.number))
+            
+        if self.mask_entity:
+            self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.entity))
+            
+        
 
     def _preprocess(self):
+        if self.mask_entity:
+            for it in self.trainset:
+                it['Question'], it['ety list'] = tag_entity(it['Question'])
+            for it in self.validset:
+                it['Question'], it['ety list'] = tag_entity(it['Question'])
+            for it in self.testset:
+                it['Question'], it['ety list'] = tag_entity(it['Question'])
+                
         if self.dataset in [DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
         transfer = number_transfer_kor
@@ -238,7 +251,7 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     unk_symbol = []
     for data in datas:
         if task_type == TaskType.SingleEquation:
-            new_data = transfer(data, tokenizer, mask_type, pre_mask)
+            new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=True)
         elif task_type == TaskType.MultiEquation:
             new_data = transfer(data, tokenizer, mask_type, pre_mask, equ_split_symbol)
         else:
@@ -285,7 +298,7 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     return processed_datas, generate_number, copy_nums, unk_symbol
 
 
-def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
+def _num_transfer_kor(data, tokenizer, mask_type, pre_mask, mask_entity=False):
     pattern = re.compile("\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
 
     num_list = data['Numbers'].split() if pre_mask is not None else []
@@ -310,6 +323,11 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
     else:
         input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = get_num_pos(input_seq, mask_type, pattern)
 
+    if mask_entity:
+        ety_list = data['ety list']
+        # print(get_ety_pos_pre_masked(input_seq, ety_list))
+        input_seq, ety_list, ety_pos, ety_all_pos, etys, ety_pos_dict, etys_for_ques = get_ety_pos_pre_masked(input_seq, ety_list)
+        
     # out_seq = seg_and_tag_svamp(equations, nums_fraction, nums)
     out_seq = equations.split()
 
@@ -321,6 +339,14 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
                 break
         num = str(str2float(num_str))
         source[pos] = num
+
+    for pos in ety_all_pos:
+        for key, value in ety_pos_dict.items():
+            if pos in value:
+                ety_str = key
+                break
+        source[pos] = ety_str
+        
     source2 = tokenizer.convert_tokens_to_string(source)
     source = tokenizer.convert_tokens_to_string(input_seq)
     # source = ' '.join(source)
@@ -399,6 +425,56 @@ def _num_transfer_transformer(data, tokenizer, mask_type, pre_mask='NUM'):
 
     return new_data
 
+def get_ety_pos_pre_masked(input_seq, ety_list):
+    sent_mask_list = NumMask.entity
+    equ_mask_list = NumMask.entity
+        
+    pattern = re.compile(r'ETY_([0-9]+)')
+    
+    etys = OrderedDict()
+    ety_pos = []
+    ety_pos_dict = {}
+
+    for word_pos, word in enumerate(input_seq):
+        pos = re.search(pattern, word)
+        if pos and pos.start() == 0:
+            ety_idx = int(pos.groups()[0])
+            word = ety_list[ety_idx]
+            if word in ety_pos_dict:
+                ety_pos_dict[word].append(word_pos)
+            else:
+                # num_list.append(word)
+                ety_pos_dict[word] = [word_pos]
+                
+    # num_list = sorted(num_list, key=lambda x: max(num_pos_dict[x]), reverse=False)
+    etys = lists2dict(ety_list, equ_mask_list[:len(ety_list)])
+
+    etys_for_ques = lists2dict(ety_list, sent_mask_list[:len(ety_list)])
+
+    # all number position
+    all_pos = []
+    
+    for ety, mask in etys_for_ques.items():
+        if ety in ety_pos_dict:
+            for pos in ety_pos_dict[ety]:
+                all_pos.append(pos)
+
+    # final numbor position
+    final_pos = []
+    for ety in ety_list:
+        if ety not in ety_pos_dict:
+            continue
+        final_pos.append(max(ety_pos_dict[ety]))
+
+    # number transform
+    for ety, mask in etys_for_ques.items():
+        if ety in ety_pos_dict:
+            for pos in ety_pos_dict[ety]:
+                input_seq[pos] = mask
+        else:
+            print(ety, ety_list, ety_pos_dict, input_seq)
+
+    return input_seq, ety_list, final_pos, all_pos, etys, ety_pos_dict, etys_for_ques
 
 def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
     if pre_mask == MaskSymbol.NUM:
@@ -523,6 +599,12 @@ def is_num_token(group, token):
            (len(group) > 1 and group[-2][1] == 'NUM' and group[-1][1] == '_' and str.isdecimal(token))
 
 
+def is_ety_token(group, token):
+    return (token == 'ETY') or \
+           (len(group) > 0 and group[-1][1] == 'ETY' and token == '_') or \
+           (len(group) > 1 and group[-2][1] == 'ETY' and group[-1][1] == '_' and str.isdecimal(token))
+
+
 def group_sub_tokens(tokens):
     token_group = []
     group = []
@@ -546,7 +628,8 @@ def group_pos(pos_list):
         if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'} \
                 and not is_float_form(group, t) \
                 and not is_special_token(group, t) \
-                and not is_num_token(group, t):
+                and not is_num_token(group, t) \
+                and not is_ety_token(group, t):
             if len(group) > 0:
                 pos_group.append(group)
             if p != 'SPACE':
@@ -584,6 +667,7 @@ def get_token_info(dataset, dp, pos, tokenizer):
         #잘못된 데이터 들어오면
         if len(tr) != len(dpr) or len(tr) != len(pr):
             print('grouping fail!')
+            exit(1)
             if len(tr) != len(dpr):
                 n = len(tr) - len(dpr)
                 dpr += dpr[-n:]
@@ -772,3 +856,48 @@ def kor_deprel_tree_to_file_(train_datas, valid_datas, test_datas, path, languag
         token_list = pororo_pipeline(data["ques source 2"], data["ques source 1"], dp, pos, lemma, template_nlp)
         new_datas.append({'id': data['id'], 'deprel': token_list})
     write_json_data(new_datas, path)
+
+    
+    
+def truncate_person_postfix(person):
+    if person.endswith('이'):
+        return person[:-1]
+    return person
+
+ner = Pororo(task='ner', lang='ko')
+token_pattern = re.compile(r'[_A-Z0-9]')
+def tag_entity(question):
+    n = ner(question)
+    
+    res = []
+    ignore_tag = ['O', 'QUANTITY', 'DATE', 'TERM', 'TIME']
+    for w in n:
+        if w[1] in ignore_tag:
+            continue
+            
+        if w[1] == 'PERSON':
+            w = (truncate_person_postfix(w[0]), w[1])
+            
+        if w[1] == 'ARTIFACT' and w[0].startswith('NUM'):
+            continue
+            
+        if token_pattern.match(w[0]) is not None:
+            continue
+            
+        if ' ' in w[0]:
+            continue
+            
+        res.append(w[0])
+            
+    entities = sorted(list(set(res)), key=len, reverse=True)
+    
+    ret_entities = []
+    pivot = 0
+    for idx, entity in enumerate(entities):
+        if entity in question:
+            question = question.replace(entity, f'ETY_{pivot}')
+            ret_entities.append(entity)
+            pivot += 1
+        
+    return question, ret_entities
+

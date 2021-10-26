@@ -49,6 +49,7 @@ class DatasetName:
     asdiv_a = "asdiv-a"
     mawps_single = "mawps-single"
     mawps_asdiv_a_svamp = "mawps_asdiv-a_svamp"
+    kor_asdiv_a = 'kor_asdiv-a'
 
 
 class DatasetType:
@@ -63,6 +64,7 @@ class DatasetLanguage:
     """
     en="en"
     zh="zh"
+    ko='ko'
 
 class TaskType:
     """task type
@@ -89,6 +91,7 @@ class MaskSymbol:
     NUM = "NUM"
     alphabet = "alphabet"
     number = "number"
+    entity = "entity"
 
 
 class NumMask:
@@ -100,6 +103,7 @@ class NumMask:
         "NUM_v", "NUM_w", "NUM_x", "NUM_y", "NUM_z"
     ]
     number = ["NUM_" + str(i) for i in range(100)]
+    entity = ["ETY_" + str(i) for i in range(100)]
 
 class SupervisingMode:
     """supervising mode"""
@@ -148,7 +152,7 @@ class EPT:
     '/': 3,
     '+': 2,
     '-': 2,
-    '=': 1
+    '=': 1,
     }
     PAD_ID = -1
 

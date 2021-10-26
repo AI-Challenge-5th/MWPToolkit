@@ -13,7 +13,7 @@ from mwptoolkit.utils.preprocess_tools import get_group_nums, get_deprel_tree, g
 from mwptoolkit.utils.preprocess_tools import id_reedit
 from mwptoolkit.utils.preprocess_tool.equation_operator import from_postfix_to_infix, from_prefix_to_infix, operator_mask,EN_rule1_stat,EN_rule2
 from mwptoolkit.utils.enum_type import DatasetName,FixType
-
+from pororo import Pororo
 
 class AbstractDataset(object):
     """abstract dataset
@@ -93,6 +93,8 @@ class AbstractDataset(object):
         
         self.prompt = config['prompt']
         self.mapping = config['mapping']
+        
+        self.mask_entity = config['mask_entity']
         
         self.max_span_size = 1
 
