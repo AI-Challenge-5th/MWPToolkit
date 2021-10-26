@@ -926,7 +926,7 @@ def tag_entity(question):
         if w[1] == 'ARTIFACT' and w[0].startswith('NUM'):
             continue
             
-        if token_pattern.match(w[0]) is not None:
+        if token_pattern.search(w[0]) is not None:
             continue
             
         if ' ' in w[0]:
