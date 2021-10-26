@@ -34,7 +34,6 @@ class KoreanRobertaDataset(PretrainDataset):
         super().__init__(config)
         self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
 
-        self.pre_mask = config['pre_mask']
         additional_mask_symbols = {self.mask_symbol, self.pre_mask}
         if MaskSymbol.NUM in additional_mask_symbols:
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=['NUM']))
@@ -57,11 +56,11 @@ class KoreanRobertaDataset(PretrainDataset):
     def _preprocess(self):
         if self.mask_entity:
             for it in self.trainset:
-                it['Question'], it['ety list'] = tag_entity(it['Question'])
+                it['Question'], it['entity list'] = tag_entity(it['Question'])
             for it in self.validset:
-                it['Question'], it['ety list'] = tag_entity(it['Question'])
+                it['Question'], it['entity list'] = tag_entity(it['Question'])
             for it in self.testset:
-                it['Question'], it['ety list'] = tag_entity(it['Question'])
+                it['Question'], it['entity list'] = tag_entity(it['Question'])
                 
         if self.dataset in [DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
@@ -70,11 +69,11 @@ class KoreanRobertaDataset(PretrainDataset):
         self.trainset, generate_list, train_copy_nums, unk_symbol = transfer(self.trainset, self.dataset,
                                                                              self.task_type, self.mask_symbol,
                                                                              self.min_generate_keep, self.tokenizer,
-                                                                             self.pre_mask, ";")
+                                                                             self.pre_mask, self.mask_entity, ";")
         self.validset, _g, valid_copy_nums, _ = transfer(self.validset, self.dataset, self.task_type, self.mask_symbol,
-                                                         self.min_generate_keep, self.tokenizer, self.pre_mask, ";")
+                                                         self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
         self.testset, _g, test_copy_nums, _ = transfer(self.testset, self.dataset, self.task_type, self.mask_symbol,
-                                                       self.min_generate_keep, self.tokenizer, self.pre_mask, ";")
+                                                       self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
 
         target_equation_fix = self.equation_fix if self.equation_fix else FixType.Infix
         source_equation_fix = self.source_equation_fix if self.source_equation_fix else FixType.Infix
@@ -232,7 +231,7 @@ class KoreanRobertaDataset(PretrainDataset):
             self.temp_symbol2idx[symbol] = idx
 
 
-def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_keep, tokenizer, pre_mask, equ_split_symbol=';'):
+def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_keep, tokenizer, pre_mask, mask_entity, equ_split_symbol=';'):
     """number transfer
 
     Args:
@@ -257,7 +256,7 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     unk_symbol = []
     for data in datas:
         if task_type == TaskType.SingleEquation:
-            new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=True)
+            new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=mask_entity)
         elif task_type == TaskType.MultiEquation:
             new_data = transfer(data, tokenizer, mask_type, pre_mask, equ_split_symbol)
         else:
@@ -330,7 +329,7 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask, mask_entity=False):
         input_seq, num_list, num_pos, all_pos, nums, num_pos_dict, nums_for_ques, nums_fraction = get_num_pos(input_seq, mask_type, pattern)
 
     if mask_entity:
-        ety_list = data['ety list']
+        ety_list = data['entity list']
         # print(get_ety_pos_pre_masked(input_seq, ety_list))
         input_seq, ety_list, ety_pos, ety_all_pos, etys, ety_pos_dict, etys_for_ques = get_ety_pos_pre_masked(input_seq, ety_list)
         
@@ -346,12 +345,13 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask, mask_entity=False):
         num = str(str2float(num_str))
         source[pos] = num
 
-    for pos in ety_all_pos:
-        for key, value in ety_pos_dict.items():
-            if pos in value:
-                ety_str = key
-                break
-        source[pos] = ety_str
+    if mask_entity:
+        for pos in ety_all_pos:
+            for key, value in ety_pos_dict.items():
+                if pos in value:
+                    ety_str = key
+                    break
+            source[pos] = ety_str
         
     source2 = tokenizer.convert_tokens_to_string(source)
     source = tokenizer.convert_tokens_to_string(input_seq)
@@ -365,6 +365,8 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask, mask_entity=False):
     new_data["equation"] = out_seq
     new_data["number list"] = num_list
     new_data["number position"] = num_pos
+    if mask_entity:
+        new_data["entity position"] = ety_pos
     new_data["id"] = str(data["ID"])
     new_data["ans"] = data["Answer"]
 

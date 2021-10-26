@@ -91,6 +91,8 @@ class AbstractDataset(object):
         
         self.root = config['root']
         
+        self.pre_mask = config['pre_mask']
+        
         self.prompt = config['prompt']
         self.mapping = config['mapping']
         
@@ -150,11 +152,11 @@ class AbstractDataset(object):
             regex = get_regex_from_from_table(prompt_table)
             
             for it in self.trainset:
-                it['Question'] = get_prompt(it['Question'], prompt_table, regex) + it['Question']
+                it['Question'] = prompting(it, prompt_table, regex, self.pre_mask)
             for it in self.validset:
-                it['Question'] = get_prompt(it['Question'], prompt_table, regex) + it['Question']
+                it['Question'] = prompting(it, prompt_table, regex, self.pre_mask)
             for it in self.testset:
-                it['Question'] = get_prompt(it['Question'], prompt_table, regex) + it['Question']
+                it['Question'] = prompting(it, prompt_table, regex, self.pre_mask)
 
     def _load_fold_dataset(self):
         """read one fold of dataset from file. 
@@ -369,7 +371,7 @@ def get_prompt(question, table, regex):
     prompt = ' '.join([' '.join(sentences) for key, sentences in table if key.issubset(question_keyword_set)])
     
     if prompt:
-        return prompt
+        return prompt + ' '
     else:
         return ''
     
@@ -398,3 +400,31 @@ def mapping(sentence, mapping_table):
     for keyword, mapped in mapping_table:
         sentence = sentence.replace(keyword, mapped)
     return sentence
+
+def prompting(q, prompt_table, regex, pre_mask=False):
+    prompt = get_prompt(q['Question'], prompt_table, regex)
+    
+    if pre_mask:
+        prompt, num_list = num_masking(prompt, q['Numbers'].split())
+    
+    return prompt + q['Question']
+
+number_regex = re.compile(r'(?<!NUM_)\d+(?:\.\d+)?')
+def num_masking(prompt, numbers):
+    res_numbers = []
+    res = []
+    for m in number_regex.finditer(prompt):
+        start = m.start()
+        end = m.end()
+        if m.group(0) in numbers:
+            token_idx = numbers.index(m.group(0))
+        else:
+            token_idx = len(numbers) + len(res_numbers)
+            res_numbers.append(m.group(0))
+        res.append((start, end, token_idx))
+        
+        
+    for start, end, token_idx in res[::-1]:
+        prompt = prompt[:start] + f'NUM_{token_idx}' + prompt[end:]
+    
+    return prompt, numbers + res_numbers
