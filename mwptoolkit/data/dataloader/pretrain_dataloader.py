@@ -4,6 +4,7 @@
 # @File: pretrain_dataloader.py
 
 
+import random
 import torch
 
 from mwptoolkit.data.dataloader.abstract_dataloader import AbstractDataLoader
@@ -85,6 +86,7 @@ class PretrainDataLoader(AbstractDataLoader):
         if type == "train":
             datas = self.dataset.trainset
             batch_size = self.train_batch_size
+            random.shuffle(datas)
         elif type == "valid":
             datas = self.dataset.validset
             batch_size = self.test_batch_size
