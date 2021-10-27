@@ -8,8 +8,10 @@ import copy
 import re
 import threading
 import sympy as sym
+from decimal import Decimal
 from mwptoolkit.utils.enum_type import SpecialTokens, OPERATORS, NumMask, MaskSymbol, FixType
 from mwptoolkit.utils.preprocess_tools import from_infix_to_postfix
+from mwptoolkit.utils.operation import OPERATIONS
 
 def get_evaluator(config):
     """build evaluator 
@@ -462,46 +464,32 @@ class PrefixEvaluator(AbstractEvaluator):
 
     def _compute_prefix_expression(self, pre_fix):
         st = list()
-        operators = ["+", "-", "^", "*", "/"]
+        operators = OPERATORS
+        operation = OPERATIONS
         pre_fix_ = copy.deepcopy(pre_fix)
         pre_fix_.reverse()
         for p in pre_fix_:
             if p not in operators:
                 pos = re.search("\d+\(", p)
                 if pos:
-                    st.append(eval(p[pos.start():pos.end() - 1] + "+" + p[pos.end() - 1:]))
+                    st.append(Decimal(p[pos.start():pos.end() - 1]) + Decimal(p[pos.end() - 1:]))
                 elif p[-1] == "%":
-                    st.append(float(p[:-1]) / 100)
+                    st.append(Decimal(p[:-1]) / 100)
                 else:
-                    st.append(eval(p))
-            elif p == "+" and len(st) > 1:
+                    if p.replace('.','',1).isdigit():
+                        st.append(Decimal(p))
+                    else:
+                        st.append(p)
+            elif p in operators and len(st) > 1:
                 a = st.pop()
                 b = st.pop()
-                st.append(a + b)
-            elif p == "*" and len(st) > 1:
-                a = st.pop()
-                b = st.pop()
-                st.append(a * b)
-            elif p == "*" and len(st) > 1:
-                a = st.pop()
-                b = st.pop()
-                st.append(a * b)
-            elif p == "/" and len(st) > 1:
-                a = st.pop()
-                b = st.pop()
-                if b == 0:
+                
+                res = operation[p](a, b)
+                
+                if res is None:
                     return None
-                st.append(a / b)
-            elif p == "-" and len(st) > 1:
-                a = st.pop()
-                b = st.pop()
-                st.append(a - b)
-            elif p == "^" and len(st) > 1:
-                a = st.pop()
-                b = st.pop()
-                if float(b) != 2.0 and float(b) != 3.0:
-                    return None
-                st.append(a**b)
+                
+                st.append(res)
             else:
                 return None
         if len(st) == 1:

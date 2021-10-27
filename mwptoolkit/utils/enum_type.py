@@ -8,8 +8,10 @@ from itertools import groupby
 from math import log10
 from sympy import Eq
 import re
+from operator import attrgetter
+from mwptoolkit.utils.operation import OPERATIONS
 
-OPERATORS = ["+", "-", "*", "/", "^"]
+OPERATORS = list(OPERATIONS.keys())
 SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<SOS>", "<EOS>", "<BRG>", "<OPT>"]
 OUTPUT_SPECIAL_TOKENS = ["<PAD>", "<UNK>"]
 PAD_TOKEN = "<PAD>"
@@ -22,7 +24,12 @@ PAD_TOKEN_IDX = 0
 class Operators:
     """operators in equation.
     """
-    Single = ["+", "-", "*", "/", "^"]
+    Single = [
+        "add", "sub", "mul", "div",
+        'gcd', 'lcm',
+        'min', 'max', 'argmin', 'argmax', 'len', 'gen',
+        'concat', 'tuple',
+    ]
     Multi = ["+", "-", "*", "/", "^", "=", "<BRG>"]
 
 

@@ -55,6 +55,9 @@ class Graph2Tree(nn.Module):
         self.operator_nums = dataset.operator_nums
         self.generate_size = len(generate_list)
         self.mask_list = NumMask.number
+        self.ety_mask_list = NumMask.entity
+        
+        self.mask_entity = dataset.mask_entity
 
         self.unk_token = self.out_symbol2idx[SpecialTokens.UNK_TOKEN]
         try:
@@ -139,6 +142,8 @@ class Graph2Tree(nn.Module):
         target_length = batch_data["equ len"]
         equ_mask = batch_data["equ mask"]
         num_list = batch_data['num list']
+        if self.mask_entity:
+            ety_list = batch_data['ety list']
         group_nums = batch_data['group nums']
 
         generate_nums = self.generate_nums
@@ -147,8 +152,12 @@ class Graph2Tree(nn.Module):
         graph = self.build_graph(seq_length, num_list, num_pos, group_nums)
         all_node_output = self.evaluate_tree(seq, seq_length, graph, generate_nums, num_pos, num_start, self.beam_size, self.max_out_len)
 
-        all_output = self.convert_idx2symbol(all_node_output, num_list[0], copy_list(nums_stack[0]))
-        targets = self.convert_idx2symbol(target[0], num_list[0], copy_list(nums_stack[0]))
+        if self.mask_entity:
+            all_output = self.convert_idx2symbol(all_node_output, num_list[0], copy_list(nums_stack[0]), ety_list=ety_list[0])
+            targets = self.convert_idx2symbol(target[0], num_list[0], copy_list(nums_stack[0]), ety_list=ety_list[0])
+        else:
+            all_output = self.convert_idx2symbol(all_node_output, num_list[0], copy_list(nums_stack[0]))
+            targets = self.convert_idx2symbol(target[0], num_list[0], copy_list(nums_stack[0]))
         return all_output, targets
 
     def train_tree(self, input_batch, input_length, target_batch, target_length, nums_stack_batch, num_size_batch, graph, generate_nums, num_pos, unk, num_start, english=False):
@@ -453,11 +462,13 @@ class Graph2Tree(nn.Module):
         batch_graph = torch.stack(batch_graph)
         return batch_graph
 
-    def convert_idx2symbol(self, output, num_list, num_stack):
+    def convert_idx2symbol(self, output, num_list, num_stack, ety_list=None):
         #batch_size=output.size(0)
         '''batch_size=1'''
         seq_len = len(output)
         num_len = len(num_list)
+        if ety_list is not None:
+            ety_len = len(ety_list)
         output_list = []
         res = []
         for s_i in range(seq_len):
@@ -471,6 +482,12 @@ class Graph2Tree(nn.Module):
                     res = []
                     break
                 res.append(num_list[num_idx])
+            elif 'ETY' in symbol:
+                ety_idx = self.ety_mask_list.index(symbol)
+                if ety_idx >= ety_len:
+                    res = []
+                    break
+                res.append(ety_list[ety_idx])
             elif symbol == SpecialTokens.UNK_TOKEN:
                 try:
                     pos_list = num_stack.pop()

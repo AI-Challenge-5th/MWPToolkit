@@ -326,7 +326,8 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
         num_list = new_data["number list"]
         out_seq = new_data["equation"]
         copy_num = len(new_data["number list"])
-        copy_ety = len(new_data["entity list"])
+        if mask_entity:
+            copy_ety = len(new_data["entity list"])
 
         for idx, s in enumerate(out_seq):
             # tag the num which is generated
