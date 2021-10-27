@@ -8,7 +8,7 @@ import random
 import os
 import copy
 import torch
-from mwptoolkit.utils.utils import read_json_data, write_json_data
+from mwptoolkit.utils.utils import read_json_data, write_json_data, read_json_data_sig
 from mwptoolkit.utils.preprocess_tools import get_group_nums, get_deprel_tree, get_span_level_deprel_tree
 from mwptoolkit.utils.preprocess_tools import id_reedit
 from mwptoolkit.utils.preprocess_tool.equation_operator import from_postfix_to_infix, from_prefix_to_infix, operator_mask,EN_rule1_stat,EN_rule2
@@ -93,6 +93,7 @@ class AbstractDataset(object):
         
         self.prompt = config['prompt']
         self.mapping = config['mapping']
+        self.encode_type = config['encode_type']
         
         self.max_span_size = 1
 
@@ -100,6 +101,9 @@ class AbstractDataset(object):
         '''
         read dataset from files
         '''
+        if self.encode_type == 'seg':
+            read_json_data = read_json_data_sig
+            
         trainset_file = self.dataset_path + "/trainset.json"
         validset_file = self.dataset_path + "/validset.json"
         testset_file = self.dataset_path + "/testset.json"
@@ -157,6 +161,8 @@ class AbstractDataset(object):
     def _load_fold_dataset(self):
         """read one fold of dataset from file. 
         """
+        if self.encode_type == 'seg':
+            read_json_data = read_json_data_sig
         trainset_file = self.dataset_path + "/trainset_fold{}.json".format(self.fold_t)
         testset_file = self.dataset_path + "/testset_fold{}.json".format(self.fold_t)
         if os.path.isabs(trainset_file):
@@ -343,7 +349,7 @@ def read_prompt_table(prompt_file_path):
         table_string = f.read()
         
     return read_prompt_table_from_string(table_string)
-        
+
 from collections import defaultdict
 def read_prompt_table_from_string(table_string):
     ret = defaultdict(list)
@@ -370,13 +376,13 @@ def get_prompt(question, table, regex):
         return prompt
     else:
         return ''
-    
+
 def read_mapping_table(mapping_file_path):
     with open(mapping_file_path, 'r') as f:
         table_string = f.read()
         
     return read_mapping_table_from_string(table_string)
-        
+
 from collections import defaultdict
 def read_mapping_table_from_string(table_string):
     ret = defaultdict(list)

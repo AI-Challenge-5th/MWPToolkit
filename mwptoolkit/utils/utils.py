@@ -34,6 +34,14 @@ def read_json_data(filename):
     return json.load(f)
 
 
+def read_json_data_sig(filename):
+    '''
+    load data from a json file
+    '''
+    f = open(filename, 'r', encoding="utf-8-sig")
+    return json.load(f)
+
+
 def read_ape200k_source(filename):
     """specially used to read data of ape200k source file
     """
