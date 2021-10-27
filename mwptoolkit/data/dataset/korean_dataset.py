@@ -32,10 +32,10 @@ from mwptoolkit.utils.utils import write_json_data, read_json_data, str2float, l
 class KoreanRobertaDataset(PretrainDataset):
     def __init__(self, config):
         super().__init__(config)
-        if tokenizer_path not in config.keys():
-            self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
-        else:
+        if config['tokenizer_path']:
             self.tokenizer = BertTokenizer.from_pretrained(config['tokenizer_path'])
+        else:
+            self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
         
 
         self.pre_mask = config['pre_mask']
@@ -180,13 +180,13 @@ class KoreanRobertaDataset(PretrainDataset):
                 logger = getLogger()
                 logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
                 self.trainset, self.validset, self.testset = \
-                    get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                    get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
             else:
                 logger = getLogger()
                 logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
                 deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
                 self.trainset, self.validset, self.testset = \
-                    get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+                    get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
 
 
     def _build_vocab(self):
