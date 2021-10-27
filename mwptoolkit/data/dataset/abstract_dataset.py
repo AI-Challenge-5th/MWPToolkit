@@ -12,6 +12,7 @@ from mwptoolkit.utils.utils import read_json_data, write_json_data
 from mwptoolkit.utils.preprocess_tools import get_group_nums, get_deprel_tree, get_span_level_deprel_tree
 from mwptoolkit.utils.preprocess_tools import id_reedit
 from mwptoolkit.utils.preprocess_tool.equation_operator import from_postfix_to_infix, from_prefix_to_infix, operator_mask,EN_rule1_stat,EN_rule2
+from mwptoolkit.utils.enum_type import MaskSymbol
 from mwptoolkit.utils.enum_type import DatasetName,FixType
 from pororo import Pororo
 
@@ -92,6 +93,7 @@ class AbstractDataset(object):
         self.root = config['root']
         
         self.pre_mask = config['pre_mask']
+        self.mask_grouping = config['mask_grouping']
         
         self.prompt = config['prompt']
         self.mapping = config['mapping']
@@ -152,11 +154,36 @@ class AbstractDataset(object):
             regex = get_regex_from_from_table(prompt_table)
             
             for it in self.trainset:
-                it['Question'] = prompting(it, prompt_table, regex, self.pre_mask)
+                it['Question'] = prompting(it, prompt_table, regex)
             for it in self.validset:
-                it['Question'] = prompting(it, prompt_table, regex, self.pre_mask)
+                it['Question'] = prompting(it, prompt_table, regex)
             for it in self.testset:
-                it['Question'] = prompting(it, prompt_table, regex, self.pre_mask)
+                it['Question'] = prompting(it, prompt_table, regex)
+                
+        if self.pre_mask == MaskSymbol.NUM or self.pre_mask == MaskSymbol.number:
+            for it in self.trainset:
+                question, num_list = num_masking(it['Question'], self.pre_mask, self.mask_grouping)
+                equation = num_masking_const(it['Equation'], self.pre_mask, num_list)
+                
+                it['Question'] = question
+                it['Equation'] = equation
+                it['Numbers'] = ' '.join(num_list)
+            for it in self.validset:
+                question, num_list = num_masking(it['Question'], self.pre_mask, self.mask_grouping)
+                equation = num_masking_const(it['Equation'], self.pre_mask, num_list)
+                
+                it['Question'] = question
+                it['Equation'] = equation
+                it['Numbers'] = ' '.join(num_list)
+            for it in self.testset:
+                question, num_list = num_masking(it['Question'], self.pre_mask, self.mask_grouping)
+                equation = num_masking_const(it['Equation'], self.pre_mask, num_list)
+                
+                it['Question'] = question
+                it['Equation'] = equation
+                it['Numbers'] = ' '.join(num_list)
+        elif self.pre_mask is not None:
+            raise NotImplementedError
 
     def _load_fold_dataset(self):
         """read one fold of dataset from file. 
@@ -401,30 +428,56 @@ def mapping(sentence, mapping_table):
         sentence = sentence.replace(keyword, mapped)
     return sentence
 
-def prompting(q, prompt_table, regex, pre_mask=False):
+def prompting(q, prompt_table, regex):
     prompt = get_prompt(q['Question'], prompt_table, regex)
-    
-    if pre_mask:
-        prompt, num_list = num_masking(prompt, q['Numbers'].split())
     
     return prompt + q['Question']
 
-number_regex = re.compile(r'(?<!NUM_)\d+(?:\.\d+)?')
-def num_masking(prompt, numbers):
-    res_numbers = []
+number_regex = re.compile(r'\d+(?:\.\d+)?')
+def num_masking(string, num_mask_type, mask_group):
+    if num_mask_type == MaskSymbol.NUM and mask_group:
+        raise Exception("NUM일경우 group 불가")
+    
+    numbers = []
     res = []
-    for m in number_regex.finditer(prompt):
+    for m in number_regex.finditer(string):
         start = m.start()
         end = m.end()
-        if m.group(0) in numbers:
+        
+        if mask_group and m.group(0) in numbers:
             token_idx = numbers.index(m.group(0))
         else:
-            token_idx = len(numbers) + len(res_numbers)
-            res_numbers.append(m.group(0))
+            token_idx = len(numbers)
+            numbers.append(m.group(0))
         res.append((start, end, token_idx))
         
         
     for start, end, token_idx in res[::-1]:
-        prompt = prompt[:start] + f'NUM_{token_idx}' + prompt[end:]
+        if num_mask_type == MaskSymbol.NUM:
+            string = string[:start] + 'NUM' + string[end:]
+        elif num_mask_type == MaskSymbol.number:
+            string = string[:start] + f'NUM_{token_idx}' + string[end:]
+        else:
+            raise NotImplementedError
     
-    return prompt, numbers + res_numbers
+    return string, numbers
+                    
+def num_masking_const(string, num_mask_type, numbers):
+    res = []
+    for m in number_regex.finditer(string):
+        if m.group(0) in numbers:
+            start = m.start()
+            end = m.end()
+
+            token_idx = numbers.index(m.group(0))
+            res.append((start, end, token_idx))
+        
+    for start, end, token_idx in res[::-1]:
+        if num_mask_type == MaskSymbol.NUM:
+            string = string[:start] + 'NUM' + string[end:]
+        elif num_mask_type == MaskSymbol.number:
+            string = string[:start] + f'NUM_{token_idx}' + string[end:]
+        else:
+            raise NotImplementedError
+    
+    return string
