@@ -360,24 +360,58 @@ def sentence_preprocess(sentence):
     return sentence
 
 
+# +
+def str2num(string_num):
+    if '.' in string_num.split():
+        res = str2float(string_num)
+    else:
+        res = int(string_num)
+    return res
+
 def transfer_digit_to_num(question):
     pattern = re.compile("\d+\/\d+%?|\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
     nums = OrderedDict()
     num_list = []
     input_seq = []
-    question = sentence_preprocess(question)
+#     question = sentence_preprocess(question)
+    num_idx = 0
     seg = question.split(" ")
     for s in seg:
         pos = re.search(pattern, s)
         if pos and pos.start() == 0:
-            input_seq.append("NUM")
-            num_list.append(str(str2float(s[pos.start():pos.end()])))
+            input_seq.append("NUM_{}".format(num_idx))
+            
+            num_list.append(str(str2num(s[pos.start():pos.end()])))
+            num_idx += 1
             if pos.end() < len(s):
                 input_seq.append(s[pos.end():])
         else:
             input_seq.append(s)
     return " ".join(input_seq), num_list
 
+def transfer_digit_to_str(question):
+    pattern = re.compile("\d+\/\d+%?|\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
+    nums = OrderedDict()
+    num_list = []
+    input_seq = []
+#     question = sentence_preprocess(question)
+    num_idx = 0
+    seg = question.split(" ")
+    for s in seg:
+        pos = re.search(pattern, s)
+        if pos and pos.start() == 0:
+            input_seq.append("NUM_{}".format(num_idx))
+            
+            num_list.append(str(s[pos.start():pos.end()]))
+            num_idx += 1
+            if pos.end() < len(s):
+                input_seq.append(s[pos.end():])
+        else:
+            input_seq.append(s)
+    return " ".join(input_seq), num_list
+
+
+# -
 
 def _num_transfer_transformer(data, tokenizer, mask_type, pre_mask='NUM'):
 
