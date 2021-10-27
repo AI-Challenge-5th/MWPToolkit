@@ -72,18 +72,16 @@ def parse_tree(tree_seq):
         return cur, tree_seq[1:]
 
 
-def convert_node_to_code(node, number_dict, var_space):
+def convert_node_to_code(node, var_space):
     head = node[0]
     # if first token is operand
     if head not in opset:
-        if head in number_dict:
-            return number_dict[head]
         return head
 
     # first token is operator
     op = head
     func = get_conversion_function(op)
-    args = [number_dict[x] if x in number_dict else x for x in node[1:]]
+    args = [x for x in node[1:]]
     code = func(*args)
 
     varname = var_space.add_var(code)
@@ -121,7 +119,7 @@ def postfix_traverse(tree, node_func):
     return result
 
 
-def convert_tree_to_code(tree, number_dict, var_space):
+def convert_tree_to_code(tree, var_space):
     """ Convert equation in tree structure to Python code
     :argument
         tree: tree structural equation, result of `parse_tree()`
@@ -130,69 +128,45 @@ def convert_tree_to_code(tree, number_dict, var_space):
         string of generated Python code
     """
 
-    return postfix_traverse(tree, lambda x: convert_node_to_code(x, number_dict, var_space))
+    return postfix_traverse(tree, lambda x: convert_node_to_code(x, var_space))
 
 
-def convert_seq_to_code(seq, num_list):
-    num_dict = {f'N{i}': x for i, x in enumerate(num_list)}
-
+def convert_seq_to_code(seq):
     tree, _ = parse_tree(seq.split())
     vs = VariableSpace()
-    final_varname = convert_tree_to_code(tree, num_dict, vs)
+    final_varname = convert_tree_to_code(tree, vs)
     return vs.to_code(final_varname)
 
 
-def csv2testset(csv_path):
-    result = pd.read_csv(csv_path)
-    seq = result.Generated
-    num_list = [eval(line) for line in result.Nums]
-    return list(zip(seq, num_list))
-
-
-# def tree2code(csv_path):
-#     answer_json = defaultdict(dict)
-#     csv_file_path = os.path.join(config.outputs_path, config.dataset + '_pred.csv')
-#     test_set = csv2testset(csv_file_path)
-#
-#     res = None
-#     for idx, line in enumerate(test_set):
-#         seq, num_list = line
-#         try:
-#             code, print_var = convert_seq_to_code(seq, num_list)
-#             exec(code)
-#             if isinstance(locals()[print_var], float):
-#                 locals()[print_var] = round(locals()[print_var], 2)
-#
-#             answer_json[idx+1]['answer'] = str(locals()[print_var])
-#             answer_json[idx+1]['equation'] = code
-#         except:
-#             answer_json[idx+1]['answer'] = "0"
-#             answer_json[idx+1]['equation'] = 'print(0)'
-#
-#     with open('./answersheet.json', 'w', encoding="utf-8") as f:
-#         json.dump(answer_json, f, indent=4)
-#     print('json file generated!')
+def read_result(path):
+    with open(path, 'r') as f:
+        results = json.load(f)
+    results = [(x['id'], x['prediction'], x['number list']) for x in results]
+    return results
 
 
 def main():
-    test_set = [
-        ('35', []),
-        ('+ N0 N1', [9, 3]),
-        ('/ N0 N1', [72, 8]),
-        ('+ - N0 N1 N2', [100, 8, 15]),
-        ('* - N0 N1 + N0 N1', [10, 3]),
-        ('sum filter_eq map_mod range N0 N1 2 1 blank', [1, 200]),
-    ]
+    # test_set = [
+    #     ('35', []),
+    #     ('+ N0 N1', [9, 3]),
+    #     ('/ N0 N1', [72, 8]),
+    #     ('+ - N0 N1 N2', [100, 8, 15]),
+    #     ('* - N0 N1 + N0 N1', [10, 3]),
+    #     ('sum filter_eq map_mod range N0 N1 2 1 blank', [1, 200]),
+    # ]
     # csv_file_path = os.path.join(config.outputs_path, config.dataset + '.csv')
     # test_set = csv2testset(csv_file_path)
 
-    for seq, num_list in test_set:
-        code, print_var = convert_seq_to_code(seq, num_list)
+    test_set = read_result('outputs/result.json')
+
+    for id, seq, num_list in test_set:
+        code, print_var = convert_seq_to_code(seq)
+        print(f'ID: {id}')
         print(f'Equation: {seq}')
-        print(f'```\n{code}\n```')
+        print(f'```\n{code}```')
         print(f'Result: ', end='')
         exec(code)
-        print('====')
+        print('\n====')
 
 
 if __name__ == '__main__':
