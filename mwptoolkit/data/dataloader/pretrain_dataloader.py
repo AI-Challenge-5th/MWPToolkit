@@ -128,6 +128,8 @@ class PretrainDataLoader(AbstractDataLoader):
         infix_equ_batch = []
 
         num_list_batch = []
+        if self.dataset.mask_entity:
+            ety_list_batch = []
         num_pos_batch = []
 
         id_batch = []
@@ -198,6 +200,8 @@ class PretrainDataLoader(AbstractDataLoader):
             infix_equ_batch.append(data["infix equation"])
             # quantity list
             num_list_batch.append(data["number list"])
+            if self.dataset.mask_entity:
+                ety_list_batch.append(data["entity list"])
             # quantity position
             if self.add_sos:
                 num_pos = [pos + 1 for pos in data["number position"]]  # pos plus one because of adding <SOS> at the head of sentence
@@ -258,7 +262,7 @@ class PretrainDataLoader(AbstractDataLoader):
         ques_len_batch = torch.tensor(ques_len_batch).long()
         equ_mask_batch = torch.tensor(equ_mask_batch).to(self.device).bool()
 
-        return {
+        ret = {
             "question": ques_tensor_batch,
             "equation": equ_tensor_batch,
             "template": temp_tensor_batch,
@@ -280,6 +284,11 @@ class PretrainDataLoader(AbstractDataLoader):
             "group nums": new_group_nums_batch,
             "infix equation": infix_equ_batch,
         }
+        
+        if self.dataset.mask_entity:
+            ret['ety list'] = ety_list_batch
+        
+        return ret
     
     def _word2idx(self, sentence):
         sentence_idx = []
