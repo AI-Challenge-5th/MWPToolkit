@@ -32,7 +32,9 @@ from mwptoolkit.utils.utils import write_json_data, read_json_data, str2float, l
 class KoreanRobertaDataset(PretrainDataset):
     def __init__(self, config):
         super().__init__(config)
-        self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
+#         self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
+        self.tokenizer = BertTokenizer.from_pretrained(config['tokenizer_path'])
+        
 
         self.pre_mask = config['pre_mask']
         additional_mask_symbols = {self.mask_symbol, self.pre_mask}
@@ -44,7 +46,7 @@ class KoreanRobertaDataset(PretrainDataset):
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.number))
 
     def _preprocess(self):
-        if self.dataset in [DatasetName.hmwp]:
+        if self.dataset in ['kor_asdiv-a', DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
         transfer = number_transfer_kor
 
@@ -164,17 +166,18 @@ class KoreanRobertaDataset(PretrainDataset):
         #     self.trainset, self.validset, self.testset = \
         #             kor_get_group_nums_(self.trainset, self.validset, self.testset, q_infos)
 
-        if os.path.exists(self.parse_tree_path) and not self.rebuild:
-            logger = getLogger()
-            logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
-            self.trainset, self.validset, self.testset = \
-                get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
-        else:
-            logger = getLogger()
-            logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
-            deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
-            self.trainset, self.validset, self.testset = \
-                get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+        if self.model.lower() in ['graph2tree']:
+            if os.path.exists(self.parse_tree_path) and not self.rebuild:
+                logger = getLogger()
+                logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
+                self.trainset, self.validset, self.testset = \
+                    get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+            else:
+                logger = getLogger()
+                logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
+                deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
+                self.trainset, self.validset, self.testset = \
+                    get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
 
     def _build_vocab(self):
         tokenizer = self.tokenizer
@@ -335,7 +338,6 @@ def _num_transfer_kor(data, tokenizer, mask_type, pre_mask):
     new_data["number position"] = num_pos
     new_data["id"] = str(data["ID"])
     new_data["ans"] = data["Answer"]
-
     return new_data
 
 
@@ -396,7 +398,6 @@ def _num_transfer_transformer(data, tokenizer, mask_type, pre_mask='NUM'):
     new_data["number position"] = num_pos
     new_data["id"] = str(data["ID"])
     new_data["ans"] = data["Answer"]
-
     return new_data
 
 

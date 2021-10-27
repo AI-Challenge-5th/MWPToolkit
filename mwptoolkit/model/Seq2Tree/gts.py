@@ -12,6 +12,7 @@ from torch import nn
 from mwptoolkit.module.Encoder.rnn_encoder import BasicRNNEncoder
 from mwptoolkit.module.Embedder.basic_embedder import BaiscEmbedder
 from mwptoolkit.module.Embedder.roberta_embedder import RobertaEmbedder
+from mwptoolkit.module.Embedder.koelectra_embedder import KoElectraEmbedder
 from mwptoolkit.module.Embedder.bert_embedder import BertEmbedder
 from mwptoolkit.module.Decoder.tree_decoder import TreeDecoder
 from mwptoolkit.module.Layer.tree_layers import *
@@ -67,6 +68,11 @@ class GTS(nn.Module):
         #module
         if config['embedding'] == 'roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
+            
+        elif config['embedding'] == 'koelectra':
+            self.embedder = KoElectraEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
         else:
@@ -152,19 +158,18 @@ class GTS(nn.Module):
         input_var = input_batch.transpose(0, 1)
 
         target = target_batch.transpose(0, 1)
-
+        
         padding_hidden = torch.FloatTensor([0.0 for _ in range(self.hidden_size)]).unsqueeze(0)
         batch_size = len(input_length)
-
+    
         if self.USE_CUDA:
             input_var = input_var.cuda()
             seq_mask = seq_mask.cuda()
             padding_hidden = padding_hidden.cuda()
             num_mask = num_mask.cuda()
-
         # Run words through encoder
-        if self.embedding == 'roberta':
-            seq_emb = self.embedder(input_var, seq_mask)
+        if self.embedding in ['koelectra', 'roberta']:
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
         else:
             seq_emb = self.embedder(input_var)
         #seq_emb = self.embedder(input_var)
@@ -264,8 +269,8 @@ class GTS(nn.Module):
             padding_hidden = padding_hidden.cuda()
             num_mask = num_mask.cuda()
         # Run words through encoder
-        if self.embedding == 'roberta':
-            seq_emb = self.embedder(input_var, seq_mask)
+        if self.embedding in ['koelectra', 'roberta']:
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
         else:
             seq_emb = self.embedder(input_var)
         #seq_emb = self.embedder(input_var)
@@ -492,8 +497,6 @@ class _GTS_(nn.Module):
         pade_outputs, _ = self.encoder(seq_emb, seq_length)
         problem_output = pade_outputs[:, -1, :self.hidden_size] + pade_outputs[:, 0, self.hidden_size:]
         encoder_outputs = pade_outputs[:, :, :self.hidden_size] + pade_outputs[:, :, self.hidden_size:]
-        #print("encoder_outputs", encoder_outputs.size())
-        #print("problem_output", problem_output.size())
 
         if target != None:
             all_node_outputs, target=self.generate_node(encoder_outputs,problem_output,target,target_length,\
@@ -541,8 +544,6 @@ class _GTS_(nn.Module):
         pade_outputs, _ = self.encoder(seq_emb, seq_length)
         problem_output = pade_outputs[:, -1, :self.hidden_size] + pade_outputs[:, 0, self.hidden_size:]
         encoder_outputs = pade_outputs[:, :, :self.hidden_size] + pade_outputs[:, :, self.hidden_size:]
-        #print("encoder_outputs", encoder_outputs.size())
-        #print("problem_output", problem_output.size())
         UNK_TOKEN = self.unk_token
 
         all_node_outputs, target_=self.generate_node(encoder_outputs,problem_output,target,target_length,\
@@ -591,8 +592,6 @@ class _GTS_(nn.Module):
         pade_outputs, _ = self.encoder(seq_emb, seq_length)
         problem_output = pade_outputs[:, -1, :self.hidden_size] + pade_outputs[:, 0, self.hidden_size:]
         encoder_outputs = pade_outputs[:, :, :self.hidden_size] + pade_outputs[:, :, self.hidden_size:]
-        #print("encoder_outputs", encoder_outputs.size())
-        #print("problem_output", problem_output.size())
 
         all_node_outputs = self.generate_node_(encoder_outputs, problem_output, padding_hidden, seq_mask, num_mask, num_pos, num_start, beam_size, max_length)
         all_outputs = self.convert_idx2symbol(all_node_outputs, num_list[0], copy_list(nums_stack[0]))
@@ -613,7 +612,6 @@ class _GTS_(nn.Module):
         copy_num_len = [len(_) for _ in num_pos]
         num_size = max(copy_num_len)
         all_nums_encoder_outputs = self.get_all_number_encoder_outputs(encoder_outputs, num_pos, num_size, self.hidden_size)
-        #print("all_nums_encoder_outputs", all_nums_encoder_outputs.size())
         left_childs = [None for _ in range(batch_size)]  #
         embeddings_stacks = [[] for _ in range(batch_size)]  #
         for t in range(max_target_length):
@@ -627,12 +625,7 @@ class _GTS_(nn.Module):
             target[:, t] = target_t
             generate_input = generate_input.to(self.device)
             left_child, right_child, node_label = self.node_generater(current_embeddings, generate_input, current_context)
-            #print("left_child", left_child.size())
-            #print("right_child", right_child.size())
-            #print("node_label", node_label.size())
             left_childs = []
-            #print("target", target.size())
-            #print("target[:,t]", target[:,t].size())
 
             for idx, l, r, node_stack, i, o in zip(range(batch_size), left_child.split(1), right_child.split(1), node_stacks, target[:, t].tolist(), embeddings_stacks):
                 if len(node_stack) != 0:
