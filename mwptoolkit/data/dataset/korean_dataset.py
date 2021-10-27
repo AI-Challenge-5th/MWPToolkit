@@ -32,8 +32,10 @@ from mwptoolkit.utils.utils import write_json_data, read_json_data, str2float, l
 class KoreanRobertaDataset(PretrainDataset):
     def __init__(self, config):
         super().__init__(config)
-#         self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
-        self.tokenizer = BertTokenizer.from_pretrained(config['tokenizer_path'])
+        if tokenizer_path not in config.keys():
+            self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
+        else:
+            self.tokenizer = BertTokenizer.from_pretrained(config['tokenizer_path'])
         
 
         self.pre_mask = config['pre_mask']
@@ -44,6 +46,12 @@ class KoreanRobertaDataset(PretrainDataset):
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.alphabet))
         if MaskSymbol.number in additional_mask_symbols:
             self.tokenizer.add_special_tokens(dict(additional_special_tokens=NumMask.number))
+
+        func_group_num_table = {
+            'dep': get_group_num_by_dep,
+            'pos': get_group_num_by_pos,
+        }
+        self.get_group_num = func_group_num_table[config['get_group_num']]
 
     def _preprocess(self):
         if self.dataset in ['kor_asdiv-a', DatasetName.hmwp]:
@@ -166,6 +174,7 @@ class KoreanRobertaDataset(PretrainDataset):
         #     self.trainset, self.validset, self.testset = \
         #             kor_get_group_nums_(self.trainset, self.validset, self.testset, q_infos)
 
+
         if self.model.lower() in ['graph2tree']:
             if os.path.exists(self.parse_tree_path) and not self.rebuild:
                 logger = getLogger()
@@ -178,6 +187,7 @@ class KoreanRobertaDataset(PretrainDataset):
                 deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
                 self.trainset, self.validset, self.testset = \
                     get_group_nums_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
+
 
     def _build_vocab(self):
         tokenizer = self.tokenizer
@@ -462,7 +472,7 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
                 else:
                     # num_list.append(word)
                     num_pos_dict[word] = [word_pos]
-        num_list = sorted(num_list, key=lambda x: max(num_pos_dict[x]), reverse=False)
+        # num_list = sorted(num_list, key=lambda x: max(num_pos_dict[x]), reverse=False)
         nums = lists2dict(num_list, equ_mask_list[:len(num_list)])
 
     nums_for_ques = lists2dict(num_list, sent_mask_list[:len(num_list)])
@@ -473,8 +483,9 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
         all_pos = copy.deepcopy(num_pos)
     else:
         for num, mask in nums_for_ques.items():
-            for pos in num_pos_dict[num]:
-                all_pos.append(pos)
+            if num in num_pos_dict:
+                for pos in num_pos_dict[num]:
+                    all_pos.append(pos)
 
     # final numbor position
     final_pos = []
@@ -482,6 +493,8 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
         final_pos = copy.deepcopy(num_pos)
     else:
         for num in num_list:
+            if num not in num_pos_dict:
+                continue
             # select the latest position as the number position
             # if the number corresponds multiple positions
             final_pos.append(max(num_pos_dict[num]))
@@ -515,6 +528,12 @@ def is_special_token(group, token):
            (len(group) > 1 and group[-2][1] == '[' and group[-1][1] in special_tokens and token == ']')
 
 
+def is_num_token(group, token):
+    return (token == 'NUM') or \
+           (len(group) > 0 and group[-1][1] == 'NUM' and token == '_') or \
+           (len(group) > 1 and group[-2][1] == 'NUM' and group[-1][1] == '_' and str.isdecimal(token))
+
+
 def group_sub_tokens(tokens):
     token_group = []
     group = []
@@ -535,7 +554,10 @@ def group_pos(pos_list):
         t, p = pos
         if t.startswith('\u200b'):
             continue
-        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'} and not is_float_form(group, t) and not is_special_token(group, t):
+        if p in {'SPACE', 'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'} \
+                and not is_float_form(group, t) \
+                and not is_special_token(group, t) \
+                and not is_num_token(group, t):
             if len(group) > 0:
                 pos_group.append(group)
             if p != 'SPACE':
@@ -617,20 +639,57 @@ def sentence_preprocess_dp(sentence):
     return result
 
 
-def get_group_nums_kor(train_datas, valid_datas, test_datas, path):
+def get_group_nums_kor(func_group_num, train_datas, valid_datas, test_datas, path):
     q_infos = read_json_data(path)
-    trainset = get_group_num(train_datas, q_infos['trainset'])
-    validset = get_group_num(valid_datas, q_infos['validset'])
-    testset = get_group_num(test_datas, q_infos['testset'])
+    trainset = func_group_num(train_datas, q_infos['trainset'])
+    validset = func_group_num(valid_datas, q_infos['validset'])
+    testset = func_group_num(test_datas, q_infos['testset'])
     return trainset, validset, testset
 
 
-def get_group_num(dataset, q_info):
+def get_group_num_by_pos(dataset, q_info):
     valid_tags = {
-    'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
-    'MM',  # adjectives
-    'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
-    'SN',  # quantities
+        'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
+        'MM', 'MAG',  # adjectives
+        'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
+        'SN',  # quantities
+    }
+
+    for data in dataset:
+        question_id = str(data["id"])
+        num_pos = data["number position"]
+        group_nums = []
+        info = q_info[question_id]
+
+        sent_start_pos = [-1] + [i for i, x in enumerate(info) if x['pos'] == 'SF']
+        sent_end_pos = [i for i, x in enumerate(info) if x['pos'] == 'SF'] + [len(info)]
+        se_pos_set = {(s, e): False for s, e in zip(sent_start_pos, sent_end_pos)}
+        for token_npos in num_pos:
+            group_num = []
+            start = max([x for x in sent_start_pos if x < token_npos])
+            end = min([x for x in sent_end_pos if x > token_npos])
+            se_pos_set[(start, end)] = True
+            for token in info[start+1:end]:
+                if not token['token'].startswith('##') and token['pos'] in valid_tags:
+                    group_num.append(token['token_pos'])
+            group_nums.append(group_num)
+        common_group_num = []
+        for (start, end), is_used in se_pos_set.items():
+            if not is_used:
+                for token in info[start+1:end]:
+                    if not token['token'].startswith('##') and token['pos'] in valid_tags:
+                        common_group_num.append(token['token_pos'])
+        group_nums = [x + common_group_num for x in group_nums]
+        data["group nums"] = group_nums
+    return dataset
+
+
+def get_group_num_by_dep(dataset, q_info):
+    valid_tags = {
+        'NNG', 'NNP', 'NNB', 'NNBC', 'NR', 'NP',  # nouns
+        'MM', 'MAG',  # adjectives
+        'VV', 'VA', 'VX', 'VCN', 'VCP',  # verbs, adjectives
+        'SN',  # quantities
     }
 
     for data in dataset:
