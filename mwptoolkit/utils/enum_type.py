@@ -24,12 +24,7 @@ PAD_TOKEN_IDX = 0
 class Operators:
     """operators in equation.
     """
-    Single = [
-        "add", "sub", "mul", "div",
-        'gcd', 'lcm',
-        'min', 'max', 'argmin', 'argmax', 'len', 'gen',
-        'concat', 'tuple',
-    ]
+    Single = list(OPERATIONS.keys())
     Multi = ["+", "-", "*", "/", "^", "=", "<BRG>"]
 
 
