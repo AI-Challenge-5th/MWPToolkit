@@ -9,6 +9,7 @@ import copy
 import warnings
 from logging import getLogger
 import re
+import itertools
 from collections import OrderedDict
 
 import torch
@@ -16,6 +17,7 @@ from transformers import RobertaTokenizer,BertTokenizer,AutoTokenizer
 from pororo import Pororo
 import stanza
 import pickle
+import random
 
 
 from mwptoolkit.data.dataset.abstract_dataset import AbstractDataset
@@ -30,6 +32,41 @@ from mwptoolkit.utils.utils import write_json_data, read_json_data, str2float, l
 
 
 class KoreanRobertaDataset(PretrainDataset):
+    def shake_token(self, data):
+        for it in data:
+            Question = it['Question']
+            ques_source_1 = it['ques source 1']
+            Equation = it['Equation']
+            entity_list = it['entity list']
+            question = it['question']
+            equation = it['equation']
+            number_list = it['number list']
+            infix_equation = it['infix equation']
+            template = it['template']
+
+            order = list(range(len(number_list)))
+            random.shuffle(order)
+            entity_order = list(range(len(entity_list)))
+            random.shuffle(entity_order)
+
+            number_tokens = {f'NUM_{from_}': f'NUM_{to}' for from_, to in enumerate(order)}
+            number_order = {from_: to for from_, to in enumerate(order)}
+            entity_tokens = {f'ETY_{from_}': f'ETY_{to}' for from_, to in enumerate(entity_order)}
+            entity_order = {from_: to for from_, to in enumerate(entity_order)}
+
+            rep = dict((re.escape(k), v) for k, v in itertools.chain(number_tokens.items(), entity_tokens.items())) 
+            pattern = re.compile("|".join(rep.keys()))
+
+            it['Question'] = pattern.sub(lambda m: rep[re.escape(m.group(0))], Question)
+            it['ques source 1'] = pattern.sub(lambda m: rep[re.escape(m.group(0))], ques_source_1)
+            it['Equation'] = pattern.sub(lambda m: rep[re.escape(m.group(0))], Equation)
+            it['question'] = [pattern.sub(lambda m: rep[re.escape(m.group(0))], it) for it in question]
+            it['equation'] = [pattern.sub(lambda m: rep[re.escape(m.group(0))], it) for it in equation]
+            it['number list'] = [number_list[number_order[i]] for i in range(len(number_list))]
+            it['entity list'] = [entity_list[entity_order[i]] for i in range(len(entity_list))]
+            it['infix equation'] = [pattern.sub(lambda m: rep[re.escape(m.group(0))], it) for it in infix_equation]
+            it['template'] = [pattern.sub(lambda m: rep[re.escape(m.group(0))], it) for it in template]
+            
     def __init__(self, config):
         super().__init__(config)
         if config['tokenizer_path']:
@@ -70,14 +107,24 @@ class KoreanRobertaDataset(PretrainDataset):
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
         transfer = number_transfer_kor
 
-        self.trainset, generate_list, train_copy_nums, unk_symbol = transfer(self.trainset, self.dataset,
-                                                                             self.task_type, self.mask_symbol,
-                                                                             self.min_generate_keep, self.tokenizer,
-                                                                             self.pre_mask, self.mask_entity, ";")
-        self.validset, _g, valid_copy_nums, _ = transfer(self.validset, self.dataset, self.task_type, self.mask_symbol,
-                                                         self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
-        self.testset, _g, test_copy_nums, _ = transfer(self.testset, self.dataset, self.task_type, self.mask_symbol,
-                                                       self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
+        if self.mask_entity:
+            self.trainset, generate_list, train_copy_nums, train_copy_etys, unk_symbol = transfer(self.trainset, self.dataset,
+                                                                                 self.task_type, self.mask_symbol,
+                                                                                 self.min_generate_keep, self.tokenizer,
+                                                                                 self.pre_mask, self.mask_entity, ";")
+            self.validset, _g, valid_copy_nums, valid_copy_etys, _ = transfer(self.validset, self.dataset, self.task_type, self.mask_symbol,
+                                                             self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
+            self.testset, _g, test_copy_nums, test_copy_etys, _ = transfer(self.testset, self.dataset, self.task_type, self.mask_symbol,
+                                                           self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
+        else:            
+            self.trainset, generate_list, train_copy_nums, unk_symbol = transfer(self.trainset, self.dataset,
+                                                                                 self.task_type, self.mask_symbol,
+                                                                                 self.min_generate_keep, self.tokenizer,
+                                                                                 self.pre_mask, self.mask_entity, ";")
+            self.validset, _g, valid_copy_nums, _ = transfer(self.validset, self.dataset, self.task_type, self.mask_symbol,
+                                                             self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
+            self.testset, _g, test_copy_nums, _ = transfer(self.testset, self.dataset, self.task_type, self.mask_symbol,
+                                                           self.min_generate_keep, self.tokenizer, self.pre_mask, self.mask_entity, ";")
 
         target_equation_fix = self.equation_fix if self.equation_fix else FixType.Infix
         source_equation_fix = self.source_equation_fix if self.source_equation_fix else FixType.Infix
@@ -126,8 +173,12 @@ class KoreanRobertaDataset(PretrainDataset):
         self.generate_list = unk_symbol + generate_list
         if self.symbol_for_tree:
             self.copy_nums = max([train_copy_nums, valid_copy_nums, test_copy_nums])
+            if self.mask_entity:
+                self.copy_etys = max([train_copy_etys, valid_copy_etys, test_copy_etys])
         else:
             self.copy_nums = train_copy_nums
+            if self.mask_entity:
+                self.copy_etys = train_copy_etys
         if self.task_type == TaskType.SingleEquation:
             self.operator_list = copy.deepcopy(Operators.Single)
         elif self.task_type == TaskType.MultiEquation:
@@ -259,6 +310,8 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     generate_nums = []
     generate_nums_dict = {}
     copy_nums = 0
+    if mask_entity:
+        copy_etys = 0
     processed_datas = []
     unk_symbol = []
     for data in datas:
@@ -273,6 +326,7 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
         num_list = new_data["number list"]
         out_seq = new_data["equation"]
         copy_num = len(new_data["number list"])
+        copy_ety = len(new_data["entity list"])
 
         for idx, s in enumerate(out_seq):
             # tag the num which is generated
@@ -287,6 +341,9 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
 
         if copy_num > copy_nums:
             copy_nums = copy_num
+            
+        if mask_entity and copy_ety > copy_etys:
+            copy_etys = copy_ety
 
         # get unknown number
         if task_type == TaskType.SingleEquation:
@@ -307,6 +364,9 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     for g in generate_nums:
         if generate_nums_dict[g] >= min_generate_keep:
             generate_number.append(g)
+    
+    if mask_entity:
+        return processed_datas, generate_number, copy_nums, copy_etys, unk_symbol
     return processed_datas, generate_number, copy_nums, unk_symbol
 
 
@@ -931,7 +991,7 @@ def tag_entity(question):
         if w[1] == 'ARTIFACT' and w[0].startswith('NUM'):
             continue
             
-        if token_pattern.match(w[0]) is not None:
+        if token_pattern.search(w[0]) is not None:
             continue
             
         if ' ' in w[0]:
