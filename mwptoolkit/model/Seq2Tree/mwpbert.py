@@ -171,15 +171,18 @@ class MWPBERT(nn.Module):
         # Run words through encoder
         if self.embedding == 'roberta':
             encoder_outputs = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
-            problem_output = encoder_outputs[0, :, :]
+#             problem_output = encoder_outputs[0, :, :]
+            problem_output = torch.mean(encoder_outputs, axis=0)
             
         elif self.embedding == 'koelectra':
             encoder_outputs = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
-            problem_output = encoder_outputs[0, :, :]
+#             problem_output = encoder_outputs[0, :, :]
+            problem_output = torch.mean(encoder_outputs, axis=0)
             
         else:
             encoder_outputs = self.embedder(input_var)
-            problem_output = encoder_outputs[0, :, :]
+#             problem_output = encoder_outputs[0, :, :]
+            problem_output = torch.mean(encoder_outputs, axis=0)
 
             
     
@@ -278,15 +281,19 @@ class MWPBERT(nn.Module):
         # Run words through encoder
         if self.embedding == 'roberta':
             encoder_outputs = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
-            problem_output = encoder_outputs[0, :, :]
+#             problem_output = encoder_outputs[0, :, :]
+            problem_output = torch.mean(encoder_outputs, axis=0)
             
         elif self.embedding == 'koelectra':
             encoder_outputs = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
-            problem_output = encoder_outputs[0, :, :]
+#             problem_output = encoder_outputs[0, :, :]
+            problem_output = torch.mean(encoder_outputs, axis=0)
             
         else:
             encoder_outputs = self.embedder(input_var)
-            problem_output = encoder_outputs[0, :, :]
+#             problem_output = encoder_outputs[0, :, :]
+            problem_output = torch.mean(encoder_outputs, axis=0)
+    
         # Prepare input and output variables
         node_stacks = [[TreeNode(_)] for _ in problem_output.split(1, dim=0)]
 
