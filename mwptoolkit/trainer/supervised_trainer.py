@@ -70,6 +70,9 @@ class SupervisedTrainer(AbstractTrainer):
         self._build_optimizer()
         if config["resume"]:
             self._load_checkpoint()
+            
+        if config['shake_token']:
+            self.shake_token = True
         #self._build_loss(config["symbol_size"], self.dataloader.dataset.out_symbol2idx[SpecialTokens.PAD_TOKEN])
 
     def _build_optimizer(self):
@@ -149,6 +152,10 @@ class SupervisedTrainer(AbstractTrainer):
     def _train_epoch(self):
         epoch_start_time = time.time()
         loss_total = 0.
+        
+        if self.shake_token:
+            self.dataloader.dataset.shake_token(self.dataloader.dataset.trainset)
+            
         self.model.train()
         for batch_idx, batch in enumerate(self.dataloader.load_data(DatasetType.Train)):
             self.batch_idx = batch_idx + 1
