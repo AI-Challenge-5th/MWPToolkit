@@ -1,6 +1,7 @@
 import json
 import argparse
 from mwptoolkit.data.dataset.korean_dataset import transfer_digit_to_str
+import pathlib
 
 DATA_PATH = './agc2021/dataset/problemsheet.json'
 EVAL_PATH ='./dataset/eval/'
@@ -8,7 +9,7 @@ EVAL_PATH ='./dataset/eval/'
 def sheet2json_main(args):
     data_path = args.data_path
     eval_path = args.eval_path
-
+    pathlib.Path(eval_path).mkdir(parents=True, exist_ok=True) 
     with open(data_path, encoding='utf-8-sig') as f:
         data = json.load(f)
         

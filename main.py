@@ -1,6 +1,7 @@
 from convert_problemsheet_to_testset_json import sheet2json_main
 from convert_result_to_code import tree2code as res2code_main
 from easydict import EasyDict
+import pathlib
 import sys
 import os
 
@@ -38,6 +39,7 @@ def get_mwptoolkit_config():
 
 if __name__=="__main__":
     
+    pathlib.Path('./outputs').mkdir(parents=True, exist_ok=True) 
     sheet2json_args = get_sheet2json_config()
     sheet2json_main(sheet2json_args)
     toolkit_args = get_mwptoolkit_config()
