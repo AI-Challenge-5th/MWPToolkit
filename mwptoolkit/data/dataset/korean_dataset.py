@@ -1037,16 +1037,16 @@ def kor_deprel_tree_to_file_(train_datas, valid_datas, test_datas, path, languag
         new_datas.append({'id': data['id'], 'deprel': token_list})
     write_json_data(new_datas, path)
 
-    
-    
+
 def truncate_person_postfix(person):
     if person.endswith('이'):
         return person[:-1]
     return person
 
-ner = Pororo(task='ner', lang='ko')
-token_pattern = re.compile(r'[_A-Z0-9]')
+
 def tag_entity(question):
+    ner = Pororo(task='ner', lang='ko')
+    token_pattern = re.compile(r'[_A-Z0-9]')
     n = ner(question)
     
     res = []
