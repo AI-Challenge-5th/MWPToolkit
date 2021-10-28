@@ -13,7 +13,7 @@ import itertools
 from collections import OrderedDict
 
 import torch
-from transformers import RobertaTokenizer,BertTokenizer,AutoTokenizer
+from transformers import RobertaTokenizer,BertTokenizer,ElectraTokenizer,AutoTokenizer
 from pororo import Pororo
 import stanza
 import pickle
@@ -69,10 +69,15 @@ class KoreanRobertaDataset(PretrainDataset):
             
     def __init__(self, config):
         super().__init__(config)
+        tokenizer_cls_table = {
+            'ko-roberta': BertTokenizer,
+            'koelectra': ElectraTokenizer,
+        }
+        tokenizer_cls = tokenizer_cls_table[self.embedding]
         if config['tokenizer_path']:
-            self.tokenizer = BertTokenizer.from_pretrained(config['tokenizer_path'])
+            self.tokenizer = tokenizer_cls.from_pretrained(config['tokenizer_path'])
         else:
-            self.tokenizer = BertTokenizer.from_pretrained(config['pretrained_model_path'])
+            self.tokenizer = tokenizer_cls.from_pretrained(config['pretrained_model_path'])
         
 
         additional_mask_symbols = {self.mask_symbol, self.pre_mask}
