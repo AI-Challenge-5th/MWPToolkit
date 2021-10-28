@@ -244,12 +244,16 @@ class KoreanRobertaDataset(PretrainDataset):
                 logger.info("read deprel tree infomation from {} ...".format(self.parse_tree_path))
                 self.trainset, self.validset, self.testset = \
                     get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
+                self.trainset, self.validset, self.testset = \
+                    deprel_to_graph_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
             else:
                 logger = getLogger()
                 logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
                 deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
                 self.trainset, self.validset, self.testset = \
                     get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
+                self.trainset, self.validset, self.testset = \
+                    deprel_to_graph_kor(self.trainset, self.validset, self.testset, self.parse_tree_path)
 
 
     def _build_vocab(self):
@@ -449,24 +453,58 @@ def sentence_preprocess(sentence):
     return sentence
 
 
+# +
+def str2num(string_num):
+    if '.' in string_num.split():
+        res = str2float(string_num)
+    else:
+        res = int(string_num)
+    return res
+
 def transfer_digit_to_num(question):
     pattern = re.compile("\d+\/\d+%?|\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
     nums = OrderedDict()
     num_list = []
     input_seq = []
-    question = sentence_preprocess(question)
+#     question = sentence_preprocess(question)
+    num_idx = 0
     seg = question.split(" ")
     for s in seg:
         pos = re.search(pattern, s)
         if pos and pos.start() == 0:
-            input_seq.append("NUM")
-            num_list.append(str(str2float(s[pos.start():pos.end()])))
+            input_seq.append("NUM_{}".format(num_idx))
+            
+            num_list.append(str(str2num(s[pos.start():pos.end()])))
+            num_idx += 1
             if pos.end() < len(s):
                 input_seq.append(s[pos.end():])
         else:
             input_seq.append(s)
     return " ".join(input_seq), num_list
 
+def transfer_digit_to_str(question):
+    pattern = re.compile("\d+\/\d+%?|\d*\(\d+/\d+\)\d*|\d+\.\d+%?|\d+%?")
+    nums = OrderedDict()
+    num_list = []
+    input_seq = []
+#     question = sentence_preprocess(question)
+    num_idx = 0
+    seg = question.split(" ")
+    for s in seg:
+        pos = re.search(pattern, s)
+        if pos and pos.start() == 0:
+            input_seq.append("NUM_{}".format(num_idx))
+            
+            num_list.append(str(s[pos.start():pos.end()]))
+            num_idx += 1
+            if pos.end() < len(s):
+                input_seq.append(s[pos.end():])
+        else:
+            input_seq.append(s)
+    return " ".join(input_seq), num_list
+
+
+# -
 
 def _num_transfer_transformer(data, tokenizer, mask_type, pre_mask='NUM'):
 
@@ -885,6 +923,37 @@ def get_group_num_by_dep(dataset, q_info):
                     group_num += dep_pos[npos+1]
             group_nums.append(group_num)
         data["group nums"] = group_nums
+    return dataset
+
+
+def deprel_to_graph_kor(train_datas, valid_datas, test_datas, path):
+    q_infos = read_json_data(path)
+    trainset = deprel_to_graph(train_datas, q_infos['trainset'])
+    validset = deprel_to_graph(valid_datas, q_infos['validset'])
+    testset = deprel_to_graph(test_datas, q_infos['testset'])
+    return trainset, validset, testset
+
+
+def deprel_to_graph(dataset, q_info):
+    for data in dataset:
+        question_id = str(data["id"])
+        info = q_info[question_id]
+
+        dep_graphs = {}
+        dep_pos, dep_info, dep_head = get_dprel_info(info)
+
+        heading_idx = [x[0] for x in dep_pos]
+        for t_group in dep_pos:
+            head = t_group[0]
+            for x in t_group[1:]:
+                dep_graphs[x] = head
+
+        for token_idx, head_group in zip(heading_idx, dep_head):
+            if head_group < 0:
+                continue
+            dep_graphs[token_idx] = head_group - 1
+
+        data["dep graph"] = {k: dep_graphs[k] for k in sorted(list(dep_graphs.keys()))}
     return dataset
 
 

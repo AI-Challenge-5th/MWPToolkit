@@ -146,6 +146,7 @@ class PretrainDataLoader(AbstractDataLoader):
         num_stack_batch = []
 
         group_nums_batch = []
+        dep_graph_batch = []
         # for data in batch_data:
         #     data['question_']=self.dataset.tokenizer.tokenize(' '.join(data["question"]))
         #batch_data=sorted(batch_data,key=lambda x:len(x['question_']),reverse=True)
@@ -213,8 +214,10 @@ class PretrainDataLoader(AbstractDataLoader):
             ans_batch.append(data["ans"])
             try:
                 group_nums_batch.append(data["group nums"])
+                dep_graph_batch.append(data["dep graph"])
             except:
                 group_nums_batch.append([])
+                dep_graph_batch.append([])
 
             num_stack_batch.append(self._build_num_stack(equation, data["number list"]))
 
@@ -282,6 +285,7 @@ class PretrainDataLoader(AbstractDataLoader):
             "temp_source": temp_source_batch,
             "ques source 1": ques_source_1_batch,
             "group nums": new_group_nums_batch,
+            "dep graph": dep_graph_batch,
             "infix equation": infix_equ_batch,
         }
         

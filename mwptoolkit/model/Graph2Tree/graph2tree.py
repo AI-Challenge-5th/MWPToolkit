@@ -45,6 +45,9 @@ class Graph2Tree(nn.Module):
         self.max_out_len = config["max_output_len"]
         self.embedding = config['embedding']
 
+        self.dep_graph = config['dep_graph']
+        self.n_graph = 3 if self.dep_graph else 2
+
         self.vocab_size = len(dataset.in_idx2word)
         self.num_start = dataset.num_start
 
@@ -88,7 +91,7 @@ class Graph2Tree(nn.Module):
         else:
             self.embedder = BaiscEmbedder(self.vocab_size, self.embedding_size, self.dropout_ratio)
         self.encoder=GraphBasedEncoder(self.embedding_size,self.hidden_size,self.rnn_cell_type,\
-                                        self.bidirectional,self.num_layers,self.dropout_ratio)
+                                        self.bidirectional,self.n_graph,self.num_layers,self.dropout_ratio)
         self.decoder = Prediction(self.hidden_size, self.operator_nums, self.generate_size, self.dropout_ratio)
         self.node_generater = GenerateNode(self.hidden_size, self.operator_nums, self.embedding_size, self.dropout_ratio)
         self.merge = Merge(self.hidden_size, self.embedding_size, self.dropout_ratio)
@@ -114,11 +117,12 @@ class Graph2Tree(nn.Module):
         equ_mask = batch_data["equ mask"]
         num_list = batch_data['num list']
         group_nums = batch_data['group nums']
+        dep_graph = batch_data['dep graph']
 
         generate_nums = self.generate_nums
         num_start = self.num_start
         unk = self.unk_token
-        graph = self.build_graph(seq_length, num_list, num_pos, group_nums)
+        graph = self.build_graph(seq_length, num_list, num_pos, group_nums, dep_graph)
 
         loss = self.train_tree(seq,seq_length,target,target_length,\
             nums_stack,num_size,graph,generate_nums,num_pos,unk,num_start)
@@ -145,11 +149,12 @@ class Graph2Tree(nn.Module):
         if self.mask_entity:
             ety_list = batch_data['ety list']
         group_nums = batch_data['group nums']
+        dep_graph = batch_data['dep graph']
 
         generate_nums = self.generate_nums
         num_start = self.num_start
 
-        graph = self.build_graph(seq_length, num_list, num_pos, group_nums)
+        graph = self.build_graph(seq_length, num_list, num_pos, group_nums, dep_graph)
         all_node_output = self.evaluate_tree(seq, seq_length, graph, generate_nums, num_pos, num_start, self.beam_size, self.max_out_len)
 
         if self.mask_entity:
@@ -414,7 +419,7 @@ class Graph2Tree(nn.Module):
                 target_input[i] = 0
         return torch.LongTensor(target), torch.LongTensor(target_input)
 
-    def build_graph(self, seq_length, num_list, num_pos, group_nums):
+    def build_graph(self, seq_length, num_list, num_pos, group_nums, dep_graph):
         max_len = seq_length.max()
         batch_size = len(seq_length)
         batch_graph = []
@@ -427,6 +432,7 @@ class Graph2Tree(nn.Module):
             graph_lower = torch.clone(x)
             graph_quanbet = torch.clone(x)
             graph_attbet = torch.clone(x)
+            graph_dep = torch.clone(x)
             for idx, n_pos in enumerate(num_pos[b_i]):
                 for pos in group_nums[b_i][idx]:
                     quantity_cell_graph[n_pos, pos] = 1
@@ -452,12 +458,19 @@ class Graph2Tree(nn.Module):
                 graph_quanbet[idx] = 1
                 graph_attbet[idx] = 1
                 graph_attbet[idx] = 1
+            for token, head in dep_graph[b_i].items():
+                graph_dep[token, head] = 1
             quantity_cell_graph = quantity_cell_graph.to(self.device)
             graph_greater = graph_greater.to(self.device)
             graph_lower = graph_lower.to(self.device)
             graph_quanbet = graph_quanbet.to(self.device)
             graph_attbet = graph_attbet.to(self.device)
-            graph = torch.stack([quantity_cell_graph, graph_greater, graph_lower, graph_quanbet, graph_attbet], dim=0)
+            graph_dep = graph_dep.to(self.device)
+            # graph = torch.stack([quantity_cell_graph, graph_greater, graph_lower, graph_quanbet, graph_attbet], dim=0)
+            graph_list = [graph_greater, graph_attbet]
+            if self.dep_graph:
+                graph_list.append(graph_dep)
+            graph = torch.stack(graph_list)
             batch_graph.append(graph)
         batch_graph = torch.stack(batch_graph)
         return batch_graph
@@ -551,7 +564,7 @@ class _Graph2Tree_(nn.Module):
         else:
             self.embedder = BaiscEmbedder(self.vocab_size, self.embedding_size, self.dropout_ratio)
         self.encoder=GraphBasedEncoder(self.embedding_size,self.hidden_size,self.rnn_cell_type,\
-                                        self.bidirectional,self.num_layers,self.dropout_ratio)
+                                        self.bidirectional,self.n_graph,self.num_layers,self.dropout_ratio)
         self.decoder = TreeDecoder(self.hidden_size, self.operator_nums, self.generate_size, self.dropout_ratio)
         self.node_generater = NodeGenerater(self.hidden_size, self.operator_nums, self.embedding_size, self.dropout_ratio)
         self.merge = SubTreeMerger(self.hidden_size, self.embedding_size, self.dropout_ratio)

@@ -1,6 +1,6 @@
 {
     "embedding_size":128,
-    "hidden_size":512,
+    "hidden_size":384,
     "learning_rate":1e-3,
     "embedding_learning_rate":1e-3,
     "rnn_cell_type":"gru",
@@ -19,5 +19,6 @@
     "equation_fix":"prefix",
     "add_sos":true,
     "add_eos":true,
-    "parse_tree_file_name":"deprel_tree_info"
+    "parse_tree_file_name":"deprel_tree_info",
+    "dep_graph":true
 }
