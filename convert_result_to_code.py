@@ -6,8 +6,12 @@ import pandas as pd
 from collections import defaultdict
 import json
 
-from config import *
+# +
+from io import StringIO
+import sys
 
+
+# -
 
 opset = {
     '+', '-', '*', '/', '%', '^',
@@ -145,6 +149,25 @@ def read_result(path):
     return results
 
 
+def tree2code():
+    test_set = read_result('outputs/result.json')
+    answer_json = defaultdict(dict)
+    for id, seq, num_list in test_set:
+        try:
+            code, print_var = convert_seq_to_code(seq)
+            exec(code)
+            if isinstance(locals()[print_var], float):
+                locals()[print_var] = round(locals()[print_var], 2)
+            answer_json[id]['answer'] = str(locals()[print_var])
+            answer_json[id]['equation'] = code
+        except Exception as e:
+            answer_json[id]['answer'] = "0"
+            answer_json[id]['equation'] = 'print(0)'
+    with open('./answersheet_5_00_deepest.json', 'w', encoding="utf-8") as f:
+        json.dump(answer_json, f, indent=4)
+    print('json file generated!')
+
+
 def main():
     # test_set = [
     #     ('35', []),
@@ -158,16 +181,27 @@ def main():
     # test_set = csv2testset(csv_file_path)
 
     test_set = read_result('outputs/result.json')
-
+    answer_json = defaultdict(dict)
     for id, seq, num_list in test_set:
-        code, print_var = convert_seq_to_code(seq)
-        print(f'ID: {id}')
-        print(f'Equation: {seq}')
-        print(f'```\n{code}```')
-        print(f'Result: ', end='')
-        exec(code)
-        print('\n====')
+        try:
+            code, print_var = convert_seq_to_code(seq)
+            print(f'ID: {id}')
+            print(f'Equation: {seq}')
+            print(f'```\n{code}```')
+            print(f'Result: ', end='')
+            exec(code)
+            print('\n====')
+                        
+        except Exception as e:
+            print(e)
+            print(f'ID: {id}')
+            print(f'Equation: {seq}')
+            print(f'```\n print(1) \n```')
+            print(f'Result: ', end='')
+            exec('print(1)')
+            print('\n====')
 
 
-if __name__ == '__main__':
-    main()
+# +
+# if __name__ == '__main__':
+#     main()

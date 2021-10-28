@@ -5,7 +5,7 @@ from mwptoolkit.data.dataset.korean_dataset import transfer_digit_to_str
 DATA_PATH = './agc2021/dataset/problemsheet.json'
 EVAL_PATH ='./dataset/eval/'
 
-def main(args):
+def sheet2json_main(args):
     data_path = args.data_path
     eval_path = args.eval_path
 
@@ -31,13 +31,3 @@ def main(args):
         json.dump([], f,  indent="\t")
     with open(eval_path+'validset.json', 'w', encoding='utf-8-sig') as f:
         json.dump([], f,  indent="\t")
-
-
-if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser(description='convert eval')
-    parser.add_argument('--data_path', type=str, default=DATA_PATH)
-    parser.add_argument('--eval_path', type=str, default=EVAL_PATH)
-    args = parser.parse_args()
-    main(args)
-
