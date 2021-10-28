@@ -108,7 +108,7 @@ class KoreanRobertaDataset(PretrainDataset):
             for it in self.testset:
                 it['Question'], it['entity list'] = tag_entity(it['Question'])
                 
-        if self.dataset in ['kor_asdiv-a', DatasetName.hmwp]:
+        if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
         transfer = number_transfer_kor
 

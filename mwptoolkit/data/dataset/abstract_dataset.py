@@ -136,8 +136,8 @@ class AbstractDataset(object):
             self.testset = self.validset + self.testset
             self.validset = []
 
-        if self.dataset in ['kor_asdiv-a', DatasetName.hmwp]:
-            self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset)
+        if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
+            self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
 
         if self.mapping:
             mapping_file = self.dataset_path + '/mapping.txt'
@@ -193,6 +193,10 @@ class AbstractDataset(object):
                 it['Numbers'] = ' '.join(num_list)
         elif self.pre_mask is not None:
             raise NotImplementedError
+
+        self.trainset = cleanse_dataset(self.trainset)
+        self.validset = cleanse_dataset(self.validset)
+        self.testset = cleanse_dataset(self.testset)
 
     def _load_fold_dataset(self):
         """read one fold of dataset from file. 
@@ -492,3 +496,11 @@ def num_masking_const(string, num_mask_type, numbers):
             raise NotImplementedError
 
     return string
+
+
+def cleanse_dataset(dataset):
+    new_dataset = []
+    for data in dataset:
+        data['Question'] = data['Question'].replace('\u200b', '')
+        new_dataset.append(data)
+    return new_dataset
