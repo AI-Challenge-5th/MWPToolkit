@@ -101,6 +101,11 @@ class AbstractDataset(object):
         '''
         read dataset from files
         '''
+        if 'read_json_data' not in locals():
+            try:
+                from mwptoolkit.utils.utils import read_json_data, write_json_data, read_json_data_sig
+            except:
+                pass
         if self.encode_type == 'seg':
             read_json_data = read_json_data_sig
             
@@ -125,7 +130,7 @@ class AbstractDataset(object):
             self.testset = self.validset + self.testset
             self.validset = []
 
-        if self.dataset in [DatasetName.hmwp]:
+        if self.dataset in ['kor_asdiv-a', DatasetName.hmwp]:
             self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset)
 
         if self.mapping:
