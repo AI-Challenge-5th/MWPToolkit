@@ -3,7 +3,7 @@ import argparse
 from mwptoolkit.data.dataset.korean_dataset import transfer_digit_to_str
 import pathlib
 
-DATA_PATH = './agc2021/dataset/problemsheet.json'
+DATA_PATH = '/home/agc2021/dataset/problemsheet.json'
 EVAL_PATH ='./dataset/eval/'
 
 def sheet2json_main(args):

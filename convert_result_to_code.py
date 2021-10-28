@@ -6,12 +6,8 @@ import pandas as pd
 from collections import defaultdict
 import json
 
-# +
 from io import StringIO
 import sys
-
-
-# -
 
 opset = {
     '+', '-', '*', '/', '%', '^',
@@ -163,7 +159,7 @@ def tree2code():
         except Exception as e:
             answer_json[id]['answer'] = "0"
             answer_json[id]['equation'] = 'print(0)'
-    with open('./answersheet_5_00_deepest.json', 'w', encoding="utf-8") as f:
+    with open('./answersheet_5_00_kesarr.json', 'w', encoding="utf-8") as f:
         json.dump(answer_json, f, indent=4)
     print('json file generated!')
 
