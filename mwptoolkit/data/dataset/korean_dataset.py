@@ -852,6 +852,8 @@ def get_group_num_by_pos(dataset, q_info):
         for token_npos in num_pos:
             group_num = []
             start = max([x for x in sent_start_pos if x < token_npos])
+            if [x for x in sent_end_pos if x > token_npos] == []:
+                breakpoint()
             end = min([x for x in sent_end_pos if x > token_npos])
             se_pos_set[(start, end)] = True
             for token in info[start+1:end]:
