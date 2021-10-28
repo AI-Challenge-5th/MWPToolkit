@@ -187,7 +187,7 @@ def main():
             print(f'Result: ', end='')
             exec(code)
             print('\n====')
-                        
+
         except Exception as e:
             print(e)
             print(f'ID: {id}')
@@ -198,6 +198,5 @@ def main():
             print('\n====')
 
 
-# +
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()

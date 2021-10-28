@@ -12,7 +12,7 @@ from mwptoolkit.module.Layer.graph_layers import PositionwiseFeedForward,LayerNo
 from mwptoolkit.module.Graph.gcn import GCN
 
 class Graph_Module(nn.Module):
-    def __init__(self, indim, hiddim, outdim, dropout=0.3):
+    def __init__(self, indim, hiddim, outdim, n_graph=2, dropout=0.3):
         super(Graph_Module, self).__init__()
         """
         Args:
@@ -22,8 +22,9 @@ class Graph_Module(nn.Module):
             combined_feature_dim: dimensionality of the joint hidden embedding for graph
             K: number of graph nodes/objects on the image
         """
+        self.n_graph = n_graph
         self.in_dim = indim
-        self.h = 4
+        self.h = self.n_graph * 2
         self.d_k = outdim//self.h
         
         self.graph = nn.ModuleList()
@@ -101,7 +102,9 @@ class Graph_Module(nn.Module):
             adj_list = [adj,adj,adj,adj]
         else:
             adj = graph.float()
-            adj_list = [adj[:,1,:],adj[:,1,:],adj[:,4,:],adj[:,4,:]]
+            # adj_list = [adj[:,1,:],adj[:,1,:],adj[:,4,:],adj[:,4,:]]
+            adj = torch.stack([adj, adj], dim=2).view(mbatches, -1, graph.size(2), graph.size(3))
+            adj_list = adj.transpose(0, 1)
 
         g_feature = \
             tuple([l(graph_nodes,x) for l, x in zip(self.graph,adj_list)])
