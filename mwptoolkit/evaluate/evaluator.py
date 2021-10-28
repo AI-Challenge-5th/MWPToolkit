@@ -371,7 +371,14 @@ class PrefixEvaluator(AbstractEvaluator):
         if test_exp == tar_exp:
             return True, True, test_exp, tar_exp
         try:
-            if abs(self._compute_prefix_expression(test_exp) - self._compute_prefix_expression(tar_exp)) < 1e-4:
+            pred = self._compute_prefix_expression(test_exp)
+            true = self._compute_prefix_expression(tar_exp)
+            if isinstance(pred, Decimal) and isinstance(true, Decimal):
+                if abs(pred - true) < 1e-4:
+                    return True, False, test_exp, tar_exp
+                else:
+                    return False, False, test_exp, tar_exp
+            elif pred == true:
                 return True, False, test_exp, tar_exp
             else:
                 return False, False, test_exp, tar_exp
