@@ -18,6 +18,7 @@ from pororo import Pororo
 import stanza
 import pickle
 import random
+from tqdm import tqdm
 
 
 from mwptoolkit.data.dataset.abstract_dataset import AbstractDataset
@@ -101,11 +102,11 @@ class KoreanRobertaDataset(PretrainDataset):
 
     def _preprocess(self):
         if self.mask_entity:
-            for it in self.trainset:
+            for it in tqdm(self.trainset):
                 it['Question'], it['entity list'] = tag_entity(it['Question'])
-            for it in self.validset:
+            for it in tqdm(self.validset):
                 it['Question'], it['entity list'] = tag_entity(it['Question'])
-            for it in self.testset:
+            for it in tqdm(self.testset):
                 it['Question'], it['entity list'] = tag_entity(it['Question'])
                 
         if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
@@ -1051,10 +1052,10 @@ def truncate_person_postfix(person):
     return person
 
 
+ner = Pororo(task='ner', lang='ko')
+token_pattern = re.compile(r'[_A-Z0-9]')
 def tag_entity(question):
-    ner = Pororo(task='ner', lang='ko')
-    token_pattern = re.compile(r'[_A-Z0-9]')
-    n = ner(question)
+    n = ner(question, num_workers=5)
     
     res = []
     ignore_tag = ['O', 'QUANTITY', 'DATE', 'TERM', 'TIME']

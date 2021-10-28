@@ -16,6 +16,7 @@ from mwptoolkit.utils.enum_type import MaskSymbol
 from mwptoolkit.utils.enum_type import DatasetName,FixType
 from pororo import Pororo
 
+
 class AbstractDataset(object):
     """abstract dataset
 
@@ -504,3 +505,4 @@ def cleanse_dataset(dataset):
         data['Question'] = data['Question'].replace('\u200b', '')
         new_dataset.append(data)
     return new_dataset
+
