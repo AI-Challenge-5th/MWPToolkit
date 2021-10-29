@@ -10,8 +10,22 @@ from io import StringIO
 import sys
 
 opset = {
-    '+', '-', '*', '/', '%', '^',
-    'sum', 'filter_eq', 'map_mod', 'range'
+    'add',
+    'sub',
+    'mul',
+    'div',
+    'gcd',
+    'lcm',
+    'min',
+    'max',
+    'argmin',
+    'argmax',
+    'len',
+    'concat',
+    'tuple',
+    'gen10',
+    'quo',
+    'rem',
 }
 
 
@@ -43,10 +57,10 @@ class VariableSpace:
         return varname
 
     def to_code(self, print_var):
-        result = 'import math\n\n'
+        result = 'import math\nimport itertools\n\n'
         for varname, code in self.vars.items():
             result += f'{varname} = {code}\n'
-        result += f'print(round({print_var}, 2))\n'
+        result += f'print(round({print_var}, 2) if isinstance({print_var}, int) else {print_var})\n'
         return result, print_var
 
 
@@ -90,18 +104,22 @@ def convert_node_to_code(node, var_space):
 
 def get_conversion_function(op):
     func_table = {
-        '+': lambda x, y: f'({x} + {y})',
-        '-': lambda x, y: f'({x} - {y})',
-        '*': lambda x, y: f'({x} * {y})',
-        '/': lambda x, y: f'({x} / {y})',
-        '%': lambda x, y: f'({x} % {y})',
-        '^': lambda x, y: f'({x} ** {y})',
-        'range': lambda x, y: f'[x for x in range({x}, {y})]',
-        'sum': lambda x, y: f'sum({x})',
-        'factorial': lambda x: f'math.factorial({x})',
-        'filter_eq': lambda x, y: f'[x for x, r in {x} if r == {y}]',
-        'filter_neq': lambda x, y: f'[x for x, r in {x} if r != {y}]',
-        'map_mod': lambda x, y: f'[(x, x % {y}) for x in {x}]',
+        'add': lambda x, y: f'({x} + {y})',
+        'sub': lambda x, y: f'({x} - {y})',
+        'mul': lambda x, y: f'({x} * {y})',
+        'div': lambda x, y: f'({x} / {y})',
+        'gcd': lambda x, y: f'math.gcd({x}, {y})',
+        'lcm': lambda x, y: f'math.lcm({x}, {y})',
+        'min': lambda x, y: f'sorted({x})[{y}-1]',
+        'max': lambda x, y: f'sorted({x})[::-1][{y}-1]',
+        'argmin': lambda x, y: f'sorted({x}, key=lambda x: x[0])[{y}-1][0]',
+        'argmax': lambda x, y: f'sorted({x}, key=lambda x: x[0])[::-1][{y}-1][0]',
+        'len': lambda x, y: f'len({x})',
+        'concat': lambda x, y: f'({x} if isinstance({x}, list) else [{x}]) + ({y} if isinstance({y}, list) else [{y}])',
+        'tuple': lambda x, y: f'("{x}", {y})',
+        'gen10': lambda x, y: f'[int("".join(map(str, it))) for it in itertools.permutations({x}, int({y})) if it[0] != 0]',
+        'quo': lambda x, y: f'({x} // {y})',
+        'rem': lambda x, y: f'({x} % {y})',
     }
     if op not in func_table:
         return None
