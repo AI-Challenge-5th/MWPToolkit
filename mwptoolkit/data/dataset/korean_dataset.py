@@ -105,7 +105,7 @@ class KoreanRobertaDataset(PretrainDataset):
         if self.mask_entity:
             if os.path.isfile('tmp_dataset.pkl'):
                 logger.info('loading pre-masked entity data...')
-                with open('tmp_dataset.pkl', 'r') as f:
+                with open('tmp_dataset.pkl', 'rb') as f:
                     self.trainset, self.validset, self.testset = pickle.load(f)
             else:
                 for it in tqdm(self.trainset):
@@ -115,7 +115,7 @@ class KoreanRobertaDataset(PretrainDataset):
                 for it in tqdm(self.testset):
                     it['Question'], it['entity list'] = tag_entity(it['Question'])
                 logger.info('saving pre-masked entity data...')
-                with open('tmp_dataset.pkl', 'w') as f:
+                with open('tmp_dataset.pkl', 'wb') as f:
                     pickle.dump([self.trainset, self.validset, self.testset], f)
                 
         if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
