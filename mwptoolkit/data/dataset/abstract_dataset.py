@@ -147,7 +147,6 @@ class AbstractDataset(object):
             else:
                 mapping_table = read_mapping_table(os.path.join(self.root,mapping_file))
             
-            
             for it in self.trainset:
                 it['Question'] = mapping(it['Question'], mapping_table)
             for it in self.validset:

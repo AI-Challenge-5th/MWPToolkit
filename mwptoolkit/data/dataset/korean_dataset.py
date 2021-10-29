@@ -103,20 +103,20 @@ class KoreanRobertaDataset(PretrainDataset):
     def _preprocess(self):
         logger = getLogger()
         if self.mask_entity:
-            if os.path.isfile('tmp_dataset.pkl'):
-                logger.info('loading pre-masked entity data...')
-                with open('tmp_dataset.pkl', 'rb') as f:
-                    self.trainset, self.validset, self.testset = pickle.load(f)
-            else:
-                for it in tqdm(self.trainset):
-                    it['Question'], it['entity list'] = tag_entity(it['Question'])
-                for it in tqdm(self.validset):
-                    it['Question'], it['entity list'] = tag_entity(it['Question'])
-                for it in tqdm(self.testset):
-                    it['Question'], it['entity list'] = tag_entity(it['Question'])
-                logger.info('saving pre-masked entity data...')
-                with open('tmp_dataset.pkl', 'wb') as f:
-                    pickle.dump([self.trainset, self.validset, self.testset], f)
+            # if os.path.isfile('tmp_dataset.pkl'):
+            #     logger.info('loading pre-masked entity data...')
+            #     with open('tmp_dataset.pkl', 'rb') as f:
+            #         self.trainset, self.validset, self.testset = pickle.load(f)
+            # else:
+            for it in tqdm(self.trainset):
+                it['Question'], it['entity list'] = tag_entity(it['Question'])
+            for it in tqdm(self.validset):
+                it['Question'], it['entity list'] = tag_entity(it['Question'])
+            for it in tqdm(self.testset):
+                it['Question'], it['entity list'] = tag_entity(it['Question'])
+            logger.info('saving pre-masked entity data...')
+            with open('tmp_dataset.pkl', 'wb') as f:
+                pickle.dump([self.trainset, self.validset, self.testset], f)
                 
         if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
@@ -264,7 +264,7 @@ class KoreanRobertaDataset(PretrainDataset):
             else:
                 logger = getLogger()
                 logger.info("build deprel tree infomation to {} ...".format(self.parse_tree_path))
-                deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
+                self.trainset, self.validset, self.testset = deprel_tree_to_file_kor(self.trainset, self.validset, self.testset, self.tokenizer, self.parse_tree_path)
                 self.trainset, self.validset, self.testset = \
                     get_group_nums_kor(self.get_group_num, self.trainset, self.validset, self.testset, self.parse_tree_path)
                 self.trainset, self.validset, self.testset = \
@@ -333,52 +333,65 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
         copy_etys = 0
     processed_datas = []
     unk_symbol = []
+    
+    new_datas = []
+    error_count = 0
     for data in datas:
-        if task_type == TaskType.SingleEquation:
-            new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=mask_entity)
-        elif task_type == TaskType.MultiEquation:
-            new_data = transfer(data, tokenizer, mask_type, pre_mask, equ_split_symbol)
-        else:
-            raise NotImplementedError
-        if dataset_name == DatasetName.mawps_single and task_type == TaskType.SingleEquation and '=' in new_data["equation"]:
+        try:
+            if task_type == TaskType.SingleEquation:
+                new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=mask_entity)
+            elif task_type == TaskType.MultiEquation:
+                new_data = transfer(data, tokenizer, mask_type, pre_mask, equ_split_symbol)
+            else:
+                raise NotImplementedError
+            if dataset_name == DatasetName.mawps_single and task_type == TaskType.SingleEquation and '=' in new_data["equation"]:
+                continue
+            num_list = new_data["number list"]
+            out_seq = new_data["equation"]
+            copy_num = len(new_data["number list"])
+            if mask_entity:
+                copy_ety = len(new_data["entity list"])
+
+            for idx, s in enumerate(out_seq):
+                # tag the num which is generated
+                if s[0] == '-' and len(s) >= 2 and s[1].isdigit() and s not in generate_nums and s not in num_list:
+                    generate_nums.append(s)
+                    generate_nums_dict[s] = 0
+                if s[0].isdigit() and s not in generate_nums and s not in num_list:
+                    generate_nums.append(s)
+                    generate_nums_dict[s] = 0
+                if s in generate_nums and s not in num_list:
+                    generate_nums_dict[s] = generate_nums_dict[s] + 1
+
+            if copy_num > copy_nums:
+                copy_nums = copy_num
+
+            if mask_entity and copy_ety > copy_etys:
+                copy_etys = copy_ety
+
+            # get unknown number
+            if task_type == TaskType.SingleEquation:
+                pass
+            elif task_type == TaskType.MultiEquation:
+                for s in out_seq:
+                    if len(s) == 1 and s.isalpha():
+                        if s in unk_symbol:
+                            continue
+                        else:
+                            unk_symbol.append(s)
+            else:
+                raise NotImplementedError
+
+            processed_datas.append(new_data)
+        except Exception as e:
+            error_count += 1
+            print(e)
             continue
-        num_list = new_data["number list"]
-        out_seq = new_data["equation"]
-        copy_num = len(new_data["number list"])
-        if mask_entity:
-            copy_ety = len(new_data["entity list"])
-
-        for idx, s in enumerate(out_seq):
-            # tag the num which is generated
-            if s[0] == '-' and len(s) >= 2 and s[1].isdigit() and s not in generate_nums and s not in num_list:
-                generate_nums.append(s)
-                generate_nums_dict[s] = 0
-            if s[0].isdigit() and s not in generate_nums and s not in num_list:
-                generate_nums.append(s)
-                generate_nums_dict[s] = 0
-            if s in generate_nums and s not in num_list:
-                generate_nums_dict[s] = generate_nums_dict[s] + 1
-
-        if copy_num > copy_nums:
-            copy_nums = copy_num
+        new_datas.append(data)
+        
+    datas = new_datas
+    print(f'error_rate: {error_count/len(datas)}')
             
-        if mask_entity and copy_ety > copy_etys:
-            copy_etys = copy_ety
-
-        # get unknown number
-        if task_type == TaskType.SingleEquation:
-            pass
-        elif task_type == TaskType.MultiEquation:
-            for s in out_seq:
-                if len(s) == 1 and s.isalpha():
-                    if s in unk_symbol:
-                        continue
-                    else:
-                        unk_symbol.append(s)
-        else:
-            raise NotImplementedError
-
-        processed_datas.append(new_data)
     # keep generate number
     generate_number = []
     for g in generate_nums:
@@ -788,50 +801,79 @@ def deprel_tree_to_file_kor(train_datas, valid_datas, test_datas, tokenizer, par
     dp = Pororo(task="dep_parse", lang="ko")
     pos = Pororo(task='pos', lang='ko')
     # print("dataset length , ", len(train_datas), len(valid_datas), len(test_datas))
-    questions_infos['trainset'] = get_token_info(train_datas, dp, pos, tokenizer)
-    questions_infos['validset'] = get_token_info(valid_datas, dp, pos, tokenizer)
-    questions_infos['testset'] = get_token_info(test_datas, dp, pos, tokenizer)
+    questions_infos['trainset'], train_datas = get_token_info(train_datas, dp, pos, tokenizer, 'train')
+    questions_infos['validset'], valid_datas = get_token_info(valid_datas, dp, pos, tokenizer, 'valid')
+    questions_infos['testset'], test_datas = get_token_info(test_datas, dp, pos, tokenizer, 'test')
 
     write_json_data(questions_infos, parse_tree_path)
+    
+    return train_datas, valid_datas, test_datas
 
-
-def get_token_info(dataset, dp, pos, tokenizer):
+import json
+def get_token_info(dataset, dp, pos, tokenizer, type_='train'):
     questions_info = {}
+    
+    error_count = dpr_count = pr_count = 0
+    errors = []
+    new_data = []
     for data in dataset:
         question_list = []
         # question = tokenizer.convert_tokens_to_string(data["question"])
         # q, num_list = transfer_digit_to_num(question)   # input은 변경 가능
         tr = group_sub_tokens(data["question"])
-        dpr = dp(sentence_preprocess_dp(data['ques source 2']))
-        pr = group_pos(pos(data['ques source 1']))
+        
+        try:
+            dpr = dp(sentence_preprocess_dp(data['ques source 2']))
+            
+            pr = group_pos(pos(data['ques source 1']))
 
-        #잘못된 데이터 들어오면
-        if len(tr) != len(dpr) or len(tr) != len(pr):
-            print('grouping fail!')
-            exit(1)
-            if len(tr) != len(dpr):
-                n = len(tr) - len(dpr)
-                dpr += dpr[-n:]
+            #잘못된 데이터 들어오면
+            if len(tr) != len(dpr) or len(tr) != len(pr):
+                error_count += 1
+                dpr_count += len(tr) != len(dpr)
+                pr_count += len(tr) != len(pr)
+                
+                print(f'grouping fail! {error_count}/{len(dataset)}')
+                print(f'{dpr_count}/{error_count} | {pr_count}/{error_count}')
 
-            if len(tr) != len(pr):
-                n = len(tr) - len(pr)
-                pr += pr[-n:]
+                errors.append({
+                    'data': data,
+                    'tr': tr,
+                    'dpr': dpr,
+                    'pr': pr,
+                })
+                
+                if len(tr) != len(dpr):
+                    n = len(tr) - len(dpr)
+                    dpr += dpr[-n:]
 
-        for t_group, p_group, d_group in zip(tr, pr, dpr):
-            for token in t_group:
-                question_info = {
-                    'token': token[1],
-                    'token_pos': token[0],
-                    'pos': p_group[0][2],
-                    'deprel': d_group[3],
-                    'head': d_group[2],
-                    'dep_pos': d_group[0],
-                }
-                question_list.append(question_info)
+                if len(tr) != len(pr):
+                    n = len(tr) - len(pr)
+                    pr += pr[-n:]
 
-        questions_info[str(data['id'])] = question_list
+            for t_group, p_group, d_group in zip(tr, pr, dpr):
+                for token in t_group:
+                    question_info = {
+                        'token': token[1],
+                        'token_pos': token[0],
+                        'pos': p_group[0][2],
+                        'deprel': d_group[3],
+                        'head': d_group[2],
+                        'dep_pos': d_group[0],
+                    }
+                    question_list.append(question_info)
 
-    return questions_info
+            questions_info[str(data['id'])] = question_list
+            new_data.append(data)
+    
+        except:
+            pass
+        
+    with open(f'{type_}_group_error.json', 'w') as f:
+        f.write(json.dumps(errors))
+    print(f'grouping_fail_rate: {error_count/len(dataset)}')
+    
+    return questions_info, new_data
 
 
 def sentence_preprocess_dp(sentence):
