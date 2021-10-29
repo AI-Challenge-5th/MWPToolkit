@@ -11,13 +11,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), ".")))
 
 
 def get_sheet2json_config():
-    return EasyDict({"data_path":"./agc2021/dataset/problemsheet.json",
-              "eval_path":"./dataset/eval/"})
+
+    return EasyDict({"data_path":"/home/agc2021/dataset/problemsheet_5_00.json",
+              "eval_path":"./eval/"})
 
 
 def get_mwptoolkit_config():
     return EasyDict({"model":"Graph2Tree",
                      "dataset":"eval",
+                     "dataset_path":"./eval",
                      "task_type":"single_equation",
                      "gpu_id":0,
                      "equation_fix":"prefix",
@@ -34,7 +36,13 @@ def get_mwptoolkit_config():
                      "get_group_num":"pos",
                      "encode_type":"seg",
                      "rebuild":True,
-                     "prompt":True,})
+                     "prompt":True,
+                      "mask_entity":True,
+                     "mask_grouping":True,
+                      "dep_graph":True,
+                     "mapping":True,
+                      "run_name":"koelectra-di-mlm-group_pos-dep_graph-5fold",
+                     })
 
 
 if __name__=="__main__":
