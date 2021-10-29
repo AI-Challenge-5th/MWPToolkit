@@ -335,7 +335,6 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     unk_symbol = []
     
     new_datas = []
-    error_count = 0
     for data in datas:
         try:
             if task_type == TaskType.SingleEquation:
@@ -384,13 +383,10 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
 
             processed_datas.append(new_data)
         except Exception as e:
-            error_count += 1
-            print(e)
             continue
         new_datas.append(data)
         
     datas = new_datas
-    print(f'error_rate: {error_count/len(datas)}')
             
     # keep generate number
     generate_number = []
@@ -814,8 +810,6 @@ import json
 def get_token_info(dataset, dp, pos, tokenizer, type_='train'):
     questions_info = {}
     
-    error_count = dpr_count = pr_count = 0
-    errors = []
     new_data = []
     for data in dataset:
         question_list = []
@@ -830,20 +824,8 @@ def get_token_info(dataset, dp, pos, tokenizer, type_='train'):
 
             #잘못된 데이터 들어오면
             if len(tr) != len(dpr) or len(tr) != len(pr):
-                error_count += 1
-                dpr_count += len(tr) != len(dpr)
-                pr_count += len(tr) != len(pr)
-                
-                print(f'grouping fail! {error_count}/{len(dataset)}')
-                print(f'{dpr_count}/{error_count} | {pr_count}/{error_count}')
+                print(f'grouping fail!')
 
-                errors.append({
-                    'data': data,
-                    'tr': tr,
-                    'dpr': dpr,
-                    'pr': pr,
-                })
-                
                 if len(tr) != len(dpr):
                     n = len(tr) - len(dpr)
                     dpr += dpr[-n:]
@@ -869,11 +851,7 @@ def get_token_info(dataset, dp, pos, tokenizer, type_='train'):
     
         except:
             pass
-        
-    with open(f'{type_}_group_error.json', 'w') as f:
-        f.write(json.dumps(errors))
-    print(f'grouping_fail_rate: {error_count/len(dataset)}')
-    
+            
     return questions_info, new_data
 
 
