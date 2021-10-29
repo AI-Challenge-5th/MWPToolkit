@@ -394,6 +394,8 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
         if generate_nums_dict[g] >= min_generate_keep:
             generate_number.append(g)
     
+    generate_number = ['1','2'] #
+    
     if mask_entity:
         return processed_datas, generate_number, copy_nums, copy_etys, unk_symbol
     return processed_datas, generate_number, copy_nums, unk_symbol

@@ -125,7 +125,9 @@ class SupervisedTrainer(AbstractTrainer):
         return batch_loss
 
     def _eval_batch(self, batch):
+        
         test_out, target = self.model.model_test(batch)
+
         batch_size = len(test_out)
         val_acc = []
         equ_acc = []
@@ -434,23 +436,26 @@ class GTSTrainer(AbstractTrainer):
 
     def _eval_batch(self, batch):
         test_out, target = self.model.model_test(batch)
-
+#         print("test_out : ", test_out)
+#         print("target_out : ",target)
         batch_size = len(test_out)
         val_acc = []
         equ_acc = []
         for idx in range(batch_size):
-            if self.config["task_type"] == TaskType.SingleEquation:
-                val_ac, equ_ac, _, _ = self.evaluator.result(test_out[idx], target[idx])
-            elif self.config["task_type"] == TaskType.MultiEquation:
-                val_ac, equ_ac, _, _ = self.evaluator.result_multi(test_out[idx], target[idx])
-            else:
-                raise NotImplementedError
+#             if self.config["task_type"] == TaskType.SingleEquation:
+#                 val_ac, equ_ac, _, _ = self.evaluator.result(test_out[idx], target[idx])
+#             elif self.config["task_type"] == TaskType.MultiEquation:
+#                 val_ac, equ_ac, _, _ = self.evaluator.result_multi(test_out[idx], target[idx])
+#             else:
+#                 raise NotImplementedError
+            val_ac = equ_ac = True
             val_acc.append(val_ac)
             equ_acc.append(equ_ac)
             result={
                 'id':batch['id'][idx],
                 'prediction':' '.join(test_out[idx]),
-                'target':' '.join(target[idx]),
+#                 'target':' '.join(target[idx]),
+                'target':' '.join(' '),
                 'number list':batch['num list'][idx],
                 'value acc':val_ac,
                 'equ acc':equ_ac
