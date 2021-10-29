@@ -774,7 +774,8 @@ def group_pos(pos_list):
         if x[0][1] in unit_set:
             is_unit = True
             new_pos_group.append(x)
-        elif is_unit:
+        elif is_unit and x[0][2] not in {'SC', 'SY', 'SF', 'SP', 'SSO', 'SSC', 'SE', 'SO'}:
+            # TODO: not perfectly resolve grouping failure
             is_unit = False
             new_pos_group[-1] = new_pos_group[-1] + x
         else:
