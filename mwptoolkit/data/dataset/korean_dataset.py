@@ -779,7 +779,7 @@ def group_pos(pos_list):
             new_pos_group[-1] = new_pos_group[-1] + x
         else:
             new_pos_group.append(x)
-    return pos_group
+    return new_pos_group
 
 
 def deprel_tree_to_file_kor(train_datas, valid_datas, test_datas, tokenizer, parse_tree_path):
