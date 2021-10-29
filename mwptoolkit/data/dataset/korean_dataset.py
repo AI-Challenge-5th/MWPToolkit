@@ -711,6 +711,7 @@ def get_num_pos_pre_masked(input_seq, num_list, mask_type, pre_mask):
                 input_seq[pos] = mask
         else:
             print(num, num_list, num_pos_dict, input_seq)
+            raise ValueError(f'missing masking on {input_seq}')
 
     nums_fraction = []
     for num, mask in nums.items():
