@@ -335,7 +335,11 @@ def number_transfer_kor(datas, dataset_name, task_type, mask_type, min_generate_
     unk_symbol = []
     for data in datas:
         if task_type == TaskType.SingleEquation:
-            new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=mask_entity)
+            # TODO: temporary skip error data cases (missing num mask)
+            try:
+                new_data = transfer(data, tokenizer, mask_type, pre_mask, mask_entity=mask_entity)
+            except:
+                continue
         elif task_type == TaskType.MultiEquation:
             new_data = transfer(data, tokenizer, mask_type, pre_mask, equ_split_symbol)
         else:
