@@ -766,6 +766,19 @@ def group_pos(pos_list):
         group.append((i,) + pos)
     if len(group) > 0:
         pos_group.append(group)
+
+    unit_set = {'㎖', 'ℓ', 'g', '㎏', 't', '㎜', '㎝', 'm', '㎞', '㎟', '㎠', '㎡', '㎢', '㎣', '㎤', '㎥', '㎦'}
+    is_unit = False
+    new_pos_group = []
+    for x in pos_group:
+        if x[0][1] in unit_set:
+            is_unit = True
+            new_pos_group.append(x)
+        elif is_unit:
+            is_unit = False
+            new_pos_group[-1] = new_pos_group[-1] + x
+        else:
+            new_pos_group.append(x)
     return pos_group
 
 

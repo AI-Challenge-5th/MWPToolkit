@@ -26,6 +26,7 @@ opset = {
     'gen10',
     'quo',
     'rem',
+    'pow',
 }
 
 
@@ -60,7 +61,7 @@ class VariableSpace:
         result = 'import math\nimport itertools\n\n'
         for varname, code in self.vars.items():
             result += f'{varname} = {code}\n'
-        result += f'print(round({print_var}, 2) if isinstance({print_var}, int) else {print_var})\n'
+        result += f'print(round(abs({print_var}), 2) if isinstance({print_var}, int) else abs({print_var}))\n'
         return result, print_var
 
 
@@ -120,6 +121,7 @@ def get_conversion_function(op):
         'gen10': lambda x, y: f'[int("".join(map(str, it))) for it in itertools.permutations({x}, int({y})) if it[0] != 0]',
         'quo': lambda x, y: f'({x} // {y})',
         'rem': lambda x, y: f'({x} % {y})',
+        'pow': lambda x, y: f'({x} ** {y})',
     }
     if op not in func_table:
         return None
