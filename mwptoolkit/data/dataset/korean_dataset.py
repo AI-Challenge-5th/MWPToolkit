@@ -101,13 +101,22 @@ class KoreanRobertaDataset(PretrainDataset):
         self.get_group_num = func_group_num_table[config['get_group_num']]
 
     def _preprocess(self):
+        logger = getLogger()
         if self.mask_entity:
-            for it in tqdm(self.trainset):
-                it['Question'], it['entity list'] = tag_entity(it['Question'])
-            for it in tqdm(self.validset):
-                it['Question'], it['entity list'] = tag_entity(it['Question'])
-            for it in tqdm(self.testset):
-                it['Question'], it['entity list'] = tag_entity(it['Question'])
+            if os.path.isfile('tmp_dataset.pkl'):
+                logger.info('loading pre-masked entity data...')
+                with open('tmp_dataset.pkl', 'r') as f:
+                    self.trainset, self.validset, self.testset = pickle.load(f)
+            else:
+                for it in tqdm(self.trainset):
+                    it['Question'], it['entity list'] = tag_entity(it['Question'])
+                for it in tqdm(self.validset):
+                    it['Question'], it['entity list'] = tag_entity(it['Question'])
+                for it in tqdm(self.testset):
+                    it['Question'], it['entity list'] = tag_entity(it['Question'])
+                logger.info('saving pre-masked entity data...')
+                with open('tmp_dataset.pkl', 'w') as f:
+                    pickle.dump([self.trainset, self.validset, self.testset], f)
                 
         if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
             self.trainset, self.validset, self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
