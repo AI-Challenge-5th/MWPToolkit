@@ -15,7 +15,7 @@ from mwptoolkit.utils.utils import clones
 def replace_masked_values(tensor, mask, replace_with):
     return tensor.masked_fill((1 - mask).bool(), replace_with)
 class GraphBasedEncoder(nn.Module):
-    def __init__(self, embedding_size, hidden_size,rnn_cell_type,bidirectional, num_layers=2, dropout_ratio=0.5):
+    def __init__(self, embedding_size, hidden_size,rnn_cell_type,bidirectional, n_graph=2, num_layers=2, dropout_ratio=0.5):
         super(GraphBasedEncoder, self).__init__()
 
         self.embedding_size = embedding_size
@@ -31,7 +31,7 @@ class GraphBasedEncoder(nn.Module):
             self.encoder = nn.RNN(embedding_size, hidden_size, num_layers, dropout=dropout_ratio, bidirectional=bidirectional)
         else:
             raise ValueError("The RNN type of encoder must be in ['lstm', 'gru', 'rnn'].")
-        self.gcn = Graph_Module(hidden_size, hidden_size, hidden_size)
+        self.gcn = Graph_Module(hidden_size, hidden_size, hidden_size, n_graph)
 
     def forward(self, input_embedding, input_lengths, batch_graph, hidden=None):
         """

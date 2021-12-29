@@ -4,6 +4,7 @@
 # @File: pretrain_dataloader.py
 
 
+import random
 import torch
 
 from mwptoolkit.data.dataloader.abstract_dataloader import AbstractDataLoader
@@ -85,6 +86,7 @@ class PretrainDataLoader(AbstractDataLoader):
         if type == "train":
             datas = self.dataset.trainset
             batch_size = self.train_batch_size
+            random.shuffle(datas)
         elif type == "valid":
             datas = self.dataset.validset
             batch_size = self.test_batch_size
@@ -126,6 +128,8 @@ class PretrainDataLoader(AbstractDataLoader):
         infix_equ_batch = []
 
         num_list_batch = []
+        if self.dataset.mask_entity:
+            ety_list_batch = []
         num_pos_batch = []
 
         id_batch = []
@@ -142,6 +146,7 @@ class PretrainDataLoader(AbstractDataLoader):
         num_stack_batch = []
 
         group_nums_batch = []
+        dep_graph_batch = []
         # for data in batch_data:
         #     data['question_']=self.dataset.tokenizer.tokenize(' '.join(data["question"]))
         #batch_data=sorted(batch_data,key=lambda x:len(x['question_']),reverse=True)
@@ -196,6 +201,8 @@ class PretrainDataLoader(AbstractDataLoader):
             infix_equ_batch.append(data["infix equation"])
             # quantity list
             num_list_batch.append(data["number list"])
+            if self.dataset.mask_entity:
+                ety_list_batch.append(data["entity list"])
             # quantity position
             if self.add_sos:
                 num_pos = [pos + 1 for pos in data["number position"]]  # pos plus one because of adding <SOS> at the head of sentence
@@ -207,8 +214,10 @@ class PretrainDataLoader(AbstractDataLoader):
             ans_batch.append(data["ans"])
             try:
                 group_nums_batch.append(data["group nums"])
+                dep_graph_batch.append(data["dep graph"])
             except:
                 group_nums_batch.append([])
+                dep_graph_batch.append([])
 
             num_stack_batch.append(self._build_num_stack(equation, data["number list"]))
 
@@ -256,7 +265,7 @@ class PretrainDataLoader(AbstractDataLoader):
         ques_len_batch = torch.tensor(ques_len_batch).long()
         equ_mask_batch = torch.tensor(equ_mask_batch).to(self.device).bool()
 
-        return {
+        ret = {
             "question": ques_tensor_batch,
             "equation": equ_tensor_batch,
             "template": temp_tensor_batch,
@@ -276,8 +285,14 @@ class PretrainDataLoader(AbstractDataLoader):
             "temp_source": temp_source_batch,
             "ques source 1": ques_source_1_batch,
             "group nums": new_group_nums_batch,
+            "dep graph": dep_graph_batch,
             "infix equation": infix_equ_batch,
         }
+        
+        if self.dataset.mask_entity:
+            ret['ety list'] = ety_list_batch
+        
+        return ret
     
     def _word2idx(self, sentence):
         sentence_idx = []

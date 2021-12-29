@@ -14,6 +14,7 @@ from mwptoolkit.module.Encoder.graph_based_encoder import GraphBasedEncoder
 from mwptoolkit.module.Embedder.basic_embedder import BaiscEmbedder
 from mwptoolkit.module.Embedder.roberta_embedder import RobertaEmbedder
 from mwptoolkit.module.Embedder.bert_embedder import BertEmbedder
+from mwptoolkit.module.Embedder.koelectra_embedder import KoElectraEmbedder
 from mwptoolkit.module.Decoder.tree_decoder import TreeDecoder
 from mwptoolkit.module.Layer.tree_layers import NodeGenerater, SubTreeMerger, TreeNode, TreeEmbedding
 from mwptoolkit.module.Layer.tree_layers import Prediction, GenerateNode, Merge
@@ -44,6 +45,9 @@ class Graph2Tree(nn.Module):
         self.max_out_len = config["max_output_len"]
         self.embedding = config['embedding']
 
+        self.dep_graph = config['dep_graph']
+        self.n_graph = 3 if self.dep_graph else 2
+
         self.vocab_size = len(dataset.in_idx2word)
         self.num_start = dataset.num_start
 
@@ -54,6 +58,9 @@ class Graph2Tree(nn.Module):
         self.operator_nums = dataset.operator_nums
         self.generate_size = len(generate_list)
         self.mask_list = NumMask.number
+        self.ety_mask_list = NumMask.entity
+        
+        self.mask_entity = dataset.mask_entity
 
         self.unk_token = self.out_symbol2idx[SpecialTokens.UNK_TOKEN]
         try:
@@ -71,12 +78,20 @@ class Graph2Tree(nn.Module):
         #module
         if config['embedding'] == 'roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
+        elif config['embedding'] == 'ko-roberta':
+            self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
+        elif config['embedding'] == 'koelectra':
+            self.embedder = KoElectraEmbedder(self.vocab_size, config['pretrained_model_path'])
+            self.embedder.token_resize(self.vocab_size)
         else:
             self.embedder = BaiscEmbedder(self.vocab_size, self.embedding_size, self.dropout_ratio)
         self.encoder=GraphBasedEncoder(self.embedding_size,self.hidden_size,self.rnn_cell_type,\
-                                        self.bidirectional,self.num_layers,self.dropout_ratio)
+                                        self.bidirectional,self.n_graph,self.num_layers,self.dropout_ratio)
         self.decoder = Prediction(self.hidden_size, self.operator_nums, self.generate_size, self.dropout_ratio)
         self.node_generater = GenerateNode(self.hidden_size, self.operator_nums, self.embedding_size, self.dropout_ratio)
         self.merge = Merge(self.hidden_size, self.embedding_size, self.dropout_ratio)
@@ -102,11 +117,12 @@ class Graph2Tree(nn.Module):
         equ_mask = batch_data["equ mask"]
         num_list = batch_data['num list']
         group_nums = batch_data['group nums']
+        dep_graph = batch_data['dep graph']
 
         generate_nums = self.generate_nums
         num_start = self.num_start
         unk = self.unk_token
-        graph = self.build_graph(seq_length, num_list, num_pos, group_nums)
+        graph = self.build_graph(seq_length, num_list, num_pos, group_nums, dep_graph)
 
         loss = self.train_tree(seq,seq_length,target,target_length,\
             nums_stack,num_size,graph,generate_nums,num_pos,unk,num_start)
@@ -130,16 +146,23 @@ class Graph2Tree(nn.Module):
         target_length = batch_data["equ len"]
         equ_mask = batch_data["equ mask"]
         num_list = batch_data['num list']
+        if self.mask_entity:
+            ety_list = batch_data['ety list']
         group_nums = batch_data['group nums']
+        dep_graph = batch_data['dep graph']
 
         generate_nums = self.generate_nums
         num_start = self.num_start
 
-        graph = self.build_graph(seq_length, num_list, num_pos, group_nums)
+        graph = self.build_graph(seq_length, num_list, num_pos, group_nums, dep_graph)
         all_node_output = self.evaluate_tree(seq, seq_length, graph, generate_nums, num_pos, num_start, self.beam_size, self.max_out_len)
 
-        all_output = self.convert_idx2symbol(all_node_output, num_list[0], copy_list(nums_stack[0]))
-        targets = self.convert_idx2symbol(target[0], num_list[0], copy_list(nums_stack[0]))
+        if self.mask_entity:
+            all_output = self.convert_idx2symbol(all_node_output, num_list[0], copy_list(nums_stack[0]), ety_list=ety_list[0])
+            targets = self.convert_idx2symbol(target[0], num_list[0], copy_list(nums_stack[0]), ety_list=ety_list[0])
+        else:
+            all_output = self.convert_idx2symbol(all_node_output, num_list[0], copy_list(nums_stack[0]))
+            targets = self.convert_idx2symbol(target[0], num_list[0], copy_list(nums_stack[0]))
         return all_output, targets
 
     def train_tree(self, input_batch, input_length, target_batch, target_length, nums_stack_batch, num_size_batch, graph, generate_nums, num_pos, unk, num_start, english=False):
@@ -172,7 +195,13 @@ class Graph2Tree(nn.Module):
             num_mask = num_mask.cuda()
 
         # Run words through encoder
-        seq_emb = self.embedder(input_var)
+        if isinstance(self.embedder, RobertaEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        elif isinstance(self.embedder, KoElectraEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        else:
+            seq_emb = self.embedder(input_var)
+        
         encoder_outputs, problem_output = self.encoder(seq_emb, input_length, graph)
 
         # Prepare input and output variables
@@ -268,7 +297,12 @@ class Graph2Tree(nn.Module):
             num_mask = num_mask.cuda()
         # Run words through encoder
 
-        seq_emb = self.embedder(input_var)
+        if isinstance(self.embedder, RobertaEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        elif isinstance(self.embedder, KoElectraEmbedder):
+            seq_emb = self.embedder(input_var, torch.logical_not(seq_mask).int().transpose(0, 1))
+        else:
+            seq_emb = self.embedder(input_var)
         encoder_outputs, problem_output = self.encoder(seq_emb, input_length, graph)
 
         # Prepare input and output variables
@@ -385,7 +419,7 @@ class Graph2Tree(nn.Module):
                 target_input[i] = 0
         return torch.LongTensor(target), torch.LongTensor(target_input)
 
-    def build_graph(self, seq_length, num_list, num_pos, group_nums):
+    def build_graph(self, seq_length, num_list, num_pos, group_nums, dep_graph):
         max_len = seq_length.max()
         batch_size = len(seq_length)
         batch_graph = []
@@ -398,6 +432,7 @@ class Graph2Tree(nn.Module):
             graph_lower = torch.clone(x)
             graph_quanbet = torch.clone(x)
             graph_attbet = torch.clone(x)
+            graph_dep = torch.clone(x)
             for idx, n_pos in enumerate(num_pos[b_i]):
                 for pos in group_nums[b_i][idx]:
                     quantity_cell_graph[n_pos, pos] = 1
@@ -423,21 +458,30 @@ class Graph2Tree(nn.Module):
                 graph_quanbet[idx] = 1
                 graph_attbet[idx] = 1
                 graph_attbet[idx] = 1
+            for token, head in dep_graph[b_i].items():
+                graph_dep[token, head] = 1
             quantity_cell_graph = quantity_cell_graph.to(self.device)
             graph_greater = graph_greater.to(self.device)
             graph_lower = graph_lower.to(self.device)
             graph_quanbet = graph_quanbet.to(self.device)
             graph_attbet = graph_attbet.to(self.device)
-            graph = torch.stack([quantity_cell_graph, graph_greater, graph_lower, graph_quanbet, graph_attbet], dim=0)
+            graph_dep = graph_dep.to(self.device)
+            # graph = torch.stack([quantity_cell_graph, graph_greater, graph_lower, graph_quanbet, graph_attbet], dim=0)
+            graph_list = [graph_greater, graph_attbet]
+            if self.dep_graph:
+                graph_list.append(graph_dep)
+            graph = torch.stack(graph_list)
             batch_graph.append(graph)
         batch_graph = torch.stack(batch_graph)
         return batch_graph
 
-    def convert_idx2symbol(self, output, num_list, num_stack):
+    def convert_idx2symbol(self, output, num_list, num_stack, ety_list=None):
         #batch_size=output.size(0)
         '''batch_size=1'''
         seq_len = len(output)
         num_len = len(num_list)
+        if ety_list is not None:
+            ety_len = len(ety_list)
         output_list = []
         res = []
         for s_i in range(seq_len):
@@ -451,6 +495,12 @@ class Graph2Tree(nn.Module):
                     res = []
                     break
                 res.append(num_list[num_idx])
+            elif 'ETY' in symbol:
+                ety_idx = self.ety_mask_list.index(symbol)
+                if ety_idx >= ety_len:
+                    res = []
+                    break
+                res.append(ety_list[ety_idx])
             elif symbol == SpecialTokens.UNK_TOKEN:
                 try:
                     pos_list = num_stack.pop()
@@ -507,12 +557,14 @@ class _Graph2Tree_(nn.Module):
         #module
         if config['embedding'] == 'roberta':
             self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
+        elif config['embedding'] == 'ko-roberta':
+            self.embedder = RobertaEmbedder(self.vocab_size, config['pretrained_model_path'])
         elif config['embedding'] == 'bert':
             self.embedder = BertEmbedder(self.vocab_size, config['pretrained_model_path'])
         else:
             self.embedder = BaiscEmbedder(self.vocab_size, self.embedding_size, self.dropout_ratio)
         self.encoder=GraphBasedEncoder(self.embedding_size,self.hidden_size,self.rnn_cell_type,\
-                                        self.bidirectional,self.num_layers,self.dropout_ratio)
+                                        self.bidirectional,self.n_graph,self.num_layers,self.dropout_ratio)
         self.decoder = TreeDecoder(self.hidden_size, self.operator_nums, self.generate_size, self.dropout_ratio)
         self.node_generater = NodeGenerater(self.hidden_size, self.operator_nums, self.embedding_size, self.dropout_ratio)
         self.merge = SubTreeMerger(self.hidden_size, self.embedding_size, self.dropout_ratio)

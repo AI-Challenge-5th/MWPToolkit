@@ -10,7 +10,7 @@ import warnings
 from logging import getLogger
 
 import torch
-from transformers import ElectraTokenizer,RobertaTokenizer,BertTokenizer
+from transformers import RobertaTokenizer,BertTokenizer
 
 from mwptoolkit.data.dataset.abstract_dataset import AbstractDataset
 from mwptoolkit.utils.enum_type import DatasetName, MaskSymbol, NumMask,TaskType,FixType,Operators,SpecialTokens
@@ -289,10 +289,6 @@ class PretrainDataset(AbstractDataset):
                 raise IndexError("{} numbers is not enough to mask {} numbers ".format(len(mask_list), self.generate_list))
         else:
             raise NotImplementedError("the type of masking number ({}) is not implemented".format(self.mask_symbol))
-            
-        if self.mask_entity:
-            mask_list = NumMask.entity
-            self.out_idx2symbol += [mask_list[i] for i in range(self.copy_etys)]
 
         self.out_idx2symbol += [SpecialTokens.UNK_TOKEN]
 

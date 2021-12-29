@@ -405,6 +405,9 @@ def infix_to_postfix(equation, free_symbols: list,
         return output_tokens
 
 
+from mwptoolkit.utils.enum_type import Operators
+
+OPERATOR_LIST = Operators.Single + Operators.Multi
 
 def operator_mask(expression):
     template = []
@@ -412,7 +415,7 @@ def operator_mask(expression):
         if isinstance(symbol, list):
             sub_temp = operator_mask(symbol)
             template.append(sub_temp)
-        elif symbol in ["+", "-", "*", "/", "^", "=", "<BRG>"]:
+        elif symbol in OPERATOR_LIST:
             template.append(SpecialTokens.OPT_TOKEN)
         else:
             template.append(symbol)

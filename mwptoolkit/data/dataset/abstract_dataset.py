@@ -8,11 +8,13 @@ import random
 import os
 import copy
 import torch
-from mwptoolkit.utils.utils import read_json_data, write_json_data
+from mwptoolkit.utils.utils import read_json_data, write_json_data, read_json_data_sig
 from mwptoolkit.utils.preprocess_tools import get_group_nums, get_deprel_tree, get_span_level_deprel_tree
 from mwptoolkit.utils.preprocess_tools import id_reedit
 from mwptoolkit.utils.preprocess_tool.equation_operator import from_postfix_to_infix, from_prefix_to_infix, operator_mask,EN_rule1_stat,EN_rule2
+from mwptoolkit.utils.enum_type import MaskSymbol
 from mwptoolkit.utils.enum_type import DatasetName,FixType
+from pororo import Pororo
 
 
 class AbstractDataset(object):
@@ -90,12 +92,30 @@ class AbstractDataset(object):
         self.device = config["device"]
         
         self.root = config['root']
+        
+        self.pre_mask = config['pre_mask']
+        self.mask_grouping = config['mask_grouping']
+
+        self.prompt = config['prompt']
+        self.mapping = config['mapping']
+        self.encode_type = config['encode_type']
+
+        self.mask_entity = config['mask_entity']
+
         self.max_span_size = 1
 
     def _load_dataset(self):
         '''
         read dataset from files
         '''
+        if 'read_json_data' not in locals():
+            try:
+                from mwptoolkit.utils.utils import read_json_data, write_json_data, read_json_data_sig
+            except:
+                pass
+        if self.encode_type == 'seg':
+            read_json_data = read_json_data_sig
+
         trainset_file = self.dataset_path + "/trainset.json"
         validset_file = self.dataset_path + "/validset.json"
         testset_file = self.dataset_path + "/testset.json"
@@ -117,13 +137,72 @@ class AbstractDataset(object):
             self.testset = self.validset + self.testset
             self.validset = []
 
-        if self.dataset in [DatasetName.hmwp]:
-            self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset)
-        
+        if self.dataset in ['kor_asdiv-a', 'kor_di_asdiv-a', DatasetName.hmwp]:
+            self.trainset,self.validset,self.testset = id_reedit(self.trainset, self.validset, self.testset, id_key='ID')
+
+        if self.mapping:
+            mapping_file = self.dataset_path + '/mapping.txt'
+            if os.path.isabs(mapping_file):
+                mapping_table = read_mapping_table(mapping_file)
+            else:
+                mapping_table = read_mapping_table(os.path.join(self.root,mapping_file))
+            
+            for it in self.trainset:
+                it['Question'] = mapping(it['Question'], mapping_table)
+            for it in self.validset:
+                it['Question'] = mapping(it['Question'], mapping_table)
+            for it in self.testset:
+                it['Question'] = mapping(it['Question'], mapping_table)
+                        
+        if self.prompt:
+            prompt_file = self.dataset_path + "/prompt.txt"
+            if os.path.isabs(prompt_file):
+                prompt_table = read_prompt_table(prompt_file)
+            else:
+                prompt_table = read_prompt_table(os.path.join(self.root,prompt_file))
+            regex = get_regex_from_from_table(prompt_table)
+            
+            for it in self.trainset:
+                it['Question'] = prompting(it, prompt_table, regex)
+            for it in self.validset:
+                it['Question'] = prompting(it, prompt_table, regex)
+            for it in self.testset:
+                it['Question'] = prompting(it, prompt_table, regex)
+
+        # if self.pre_mask == MaskSymbol.NUM or self.pre_mask == MaskSymbol.number:
+        #     for it in self.trainset:
+        #         question, num_list = num_masking(it['Question'], self.pre_mask, self.mask_grouping)
+        #         equation = num_masking_const(it['Equation'], self.pre_mask, num_list)
+        #
+        #         it['Question'] = question
+        #         it['Equation'] = equation
+        #         it['Numbers'] = ' '.join(num_list)
+        #     for it in self.validset:
+        #         question, num_list = num_masking(it['Question'], self.pre_mask, self.mask_grouping)
+        #         equation = num_masking_const(it['Equation'], self.pre_mask, num_list)
+        #
+        #         it['Question'] = question
+        #         it['Equation'] = equation
+        #         it['Numbers'] = ' '.join(num_list)
+        #     for it in self.testset:
+        #         question, num_list = num_masking(it['Question'], self.pre_mask, self.mask_grouping)
+        #         equation = num_masking_const(it['Equation'], self.pre_mask, num_list)
+        #
+        #         it['Question'] = question
+        #         it['Equation'] = equation
+        #         it['Numbers'] = ' '.join(num_list)
+        # elif self.pre_mask is not None:
+        #     raise NotImplementedError
+
+        self.trainset = cleanse_dataset(self.trainset)
+        self.validset = cleanse_dataset(self.validset)
+        self.testset = cleanse_dataset(self.testset)
 
     def _load_fold_dataset(self):
         """read one fold of dataset from file. 
         """
+        if self.encode_type == 'seg':
+            read_json_data = read_json_data_sig
         trainset_file = self.dataset_path + "/trainset_fold{}.json".format(self.fold_t)
         testset_file = self.dataset_path + "/testset_fold{}.json".format(self.fold_t)
         if os.path.isabs(trainset_file):
@@ -304,3 +383,125 @@ class AbstractDataset(object):
 
     def _update_vocab(self, vocab_list):
         raise NotImplementedError
+
+def read_prompt_table(prompt_file_path):
+    with open(prompt_file_path, 'r') as f:
+        table_string = f.read()
+        
+    return read_prompt_table_from_string(table_string)
+
+from collections import defaultdict
+def read_prompt_table_from_string(table_string):
+    ret = defaultdict(list)
+    
+    for line in table_string.split('\n'):
+        keywords, sentence = line.split('|')
+        keyword_list = keywords.split(',')
+        
+        ret[tuple(sorted(keyword_list))].append(sentence)
+    
+    return [(set(key), value) for key, value in ret.items()]
+
+import itertools
+def get_regex_from_from_table(table):
+    return re.compile('(' + '|'.join(sorted(set(itertools.chain(*[key for key, _ in table])), key=len)[::-1]) + ')')
+
+import re
+def get_prompt(question, table, regex):
+    question_keyword_set = set(re.findall(regex, question))
+    
+    prompt = ' '.join([' '.join(sentences) for key, sentences in table if key.issubset(question_keyword_set)])
+    
+    if prompt:
+        return prompt + ' '
+    else:
+        return ''
+
+def read_mapping_table(mapping_file_path):
+    with open(mapping_file_path, 'r') as f:
+        table_string = f.read()
+        
+    return read_mapping_table_from_string(table_string)
+
+from collections import defaultdict
+def read_mapping_table_from_string(table_string):
+    ret = defaultdict(list)
+    
+    all_keywords = []
+    
+    for line in table_string.split('\n'):
+        keywords, mapped = line.split('|')
+        keyword_list = keywords.split(',')
+        
+        for keyword in keyword_list:
+            all_keywords.append((keyword, mapped))
+
+    return all_keywords
+
+def mapping(sentence, mapping_table):
+    for keyword, mapped in mapping_table:
+        sentence = sentence.replace(keyword, mapped)
+    return sentence
+
+def prompting(q, prompt_table, regex):
+    prompt = get_prompt(q['Question'], prompt_table, regex)
+
+    return prompt + q['Question']
+
+number_regex = re.compile(r'\d+(?:\.\d+)?')
+def num_masking(string, num_mask_type, mask_group):
+    if num_mask_type == MaskSymbol.NUM and mask_group:
+        raise Exception("NUM일경우 group 불가")
+
+    numbers = []
+    res = []
+    for m in number_regex.finditer(string):
+        start = m.start()
+        end = m.end()
+
+        if mask_group and m.group(0) in numbers:
+            token_idx = numbers.index(m.group(0))
+        else:
+            token_idx = len(numbers)
+            numbers.append(m.group(0))
+        res.append((start, end, token_idx))
+
+
+    for start, end, token_idx in res[::-1]:
+        if num_mask_type == MaskSymbol.NUM:
+            string = string[:start] + 'NUM' + string[end:]
+        elif num_mask_type == MaskSymbol.number:
+            string = string[:start] + f'NUM_{token_idx}' + string[end:]
+        else:
+            raise NotImplementedError
+
+    return string, numbers
+
+def num_masking_const(string, num_mask_type, numbers):
+    res = []
+    for m in number_regex.finditer(string):
+        if m.group(0) in numbers:
+            start = m.start()
+            end = m.end()
+
+            token_idx = numbers.index(m.group(0))
+            res.append((start, end, token_idx))
+
+    for start, end, token_idx in res[::-1]:
+        if num_mask_type == MaskSymbol.NUM:
+            string = string[:start] + 'NUM' + string[end:]
+        elif num_mask_type == MaskSymbol.number:
+            string = string[:start] + f'NUM_{token_idx}' + string[end:]
+        else:
+            raise NotImplementedError
+
+    return string
+
+
+def cleanse_dataset(dataset):
+    new_dataset = []
+    for data in dataset:
+        data['Question'] = data['Question'].replace('\u200b', '')
+        new_dataset.append(data)
+    return new_dataset
+

@@ -250,9 +250,15 @@ class Config(object):
         model_name = self.final_config_dict["model"]
         dataset_name = self.final_config_dict["dataset"]
         fix = self.final_config_dict["equation_fix"]
-        path_config_dict["checkpoint_path"] = 'checkpoint/' + '{}-{}-{}.pth'.format(model_name, dataset_name, fix)
-        path_config_dict["trained_model_path"] = 'trained_model/' + '{}-{}-{}.pth'.format(model_name, dataset_name, fix)
-        path_config_dict["log_path"] = 'log/' + '{}-{}-{}.log'.format(model_name, dataset_name, fix)
+        if 'run_name' in self.final_config_dict:
+            run_name = self.final_config_dict["run_name"]
+            path_config_dict["checkpoint_path"] = 'checkpoint/' + '{}.pth'.format(run_name)
+            path_config_dict["trained_model_path"] = 'trained_model/' + '{}.pth'.format(run_name)
+            path_config_dict["log_path"] = 'log/' + '{}.log'.format(run_name)
+        else:
+            path_config_dict["checkpoint_path"] = 'checkpoint/' + '{}-{}-{}.pth'.format(model_name, dataset_name, fix)
+            path_config_dict["trained_model_path"] = 'trained_model/' + '{}-{}-{}.pth'.format(model_name, dataset_name, fix)
+            path_config_dict["log_path"] = 'log/' + '{}-{}-{}.log'.format(model_name, dataset_name, fix)
         for key, value in path_config_dict.items():
             try:
                 path_config_dict[key] = self.cmd_config_dict[key]

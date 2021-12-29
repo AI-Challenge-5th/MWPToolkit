@@ -8,8 +8,10 @@ from itertools import groupby
 from math import log10
 from sympy import Eq
 import re
+from operator import attrgetter
+from mwptoolkit.utils.operation import OPERATIONS
 
-OPERATORS = ["+", "-", "*", "/", "^"]
+OPERATORS = list(OPERATIONS.keys())
 SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<SOS>", "<EOS>", "<BRG>", "<OPT>"]
 OUTPUT_SPECIAL_TOKENS = ["<PAD>", "<UNK>"]
 PAD_TOKEN = "<PAD>"
@@ -22,7 +24,7 @@ PAD_TOKEN_IDX = 0
 class Operators:
     """operators in equation.
     """
-    Single = ["+", "-", "*", "/", "^"]
+    Single = list(OPERATIONS.keys())
     Multi = ["+", "-", "*", "/", "^", "=", "<BRG>"]
 
 
@@ -49,6 +51,7 @@ class DatasetName:
     asdiv_a = "asdiv-a"
     mawps_single = "mawps-single"
     mawps_asdiv_a_svamp = "mawps_asdiv-a_svamp"
+    kor_asdiv_a = 'kor_asdiv-a'
 
 
 class DatasetType:
@@ -63,6 +66,7 @@ class DatasetLanguage:
     """
     en="en"
     zh="zh"
+    ko='ko'
 
 class TaskType:
     """task type
@@ -89,6 +93,7 @@ class MaskSymbol:
     NUM = "NUM"
     alphabet = "alphabet"
     number = "number"
+    entity = "entity"
 
 
 class NumMask:
@@ -100,6 +105,7 @@ class NumMask:
         "NUM_v", "NUM_w", "NUM_x", "NUM_y", "NUM_z"
     ]
     number = ["NUM_" + str(i) for i in range(100)]
+    entity = ["ETY_" + str(i) for i in range(100)]
 
 class SupervisingMode:
     """supervising mode"""
@@ -148,7 +154,7 @@ class EPT:
     '/': 3,
     '+': 2,
     '-': 2,
-    '=': 1
+    '=': 1,
     }
     PAD_ID = -1
 

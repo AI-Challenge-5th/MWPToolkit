@@ -2666,92 +2666,92 @@ def from_infix_to_multi_way_tree(expression):
     return res
 
 
-def id_reedit(trainset, validset, testset):
+def id_reedit(trainset, validset, testset, id_key='id'):
     r"""if some datas of a dataset hava the same id, re-edit the id for differentiate them. 
 
     example: There are two datas have the same id 709356. Make one of them be 709356 and the other be 709356-1.
     """
     id_dict = {}
     for data in trainset:
-        if not isinstance(data['id'], str):
-            data['id'] = str(data['id'])
+        if not isinstance(data[id_key], str):
+            data[id_key] = str(data[id_key])
         try:
-            id_dict[data['id']] = id_dict[data['id']] + 1
+            id_dict[data[id_key]] = id_dict[data[id_key]] + 1
         except:
-            id_dict[data['id']] = 1
+            id_dict[data[id_key]] = 1
     for data in validset:
-        if not isinstance(data['id'], str):
-            data['id'] = str(data['id'])
+        if not isinstance(data[id_key], str):
+            data[id_key] = str(data[id_key])
         try:
-            id_dict[data['id']] = id_dict[data['id']] + 1
+            id_dict[data[id_key]] = id_dict[data[id_key]] + 1
         except:
-            id_dict[data['id']] = 1
+            id_dict[data[id_key]] = 1
     for data in testset:
-        if not isinstance(data['id'], str):
-            data['id'] = str(data['id'])
+        if not isinstance(data[id_key], str):
+            data[id_key] = str(data[id_key])
         try:
-            id_dict[data['id']] = id_dict[data['id']] + 1
+            id_dict[data[id_key]] = id_dict[data[id_key]] + 1
         except:
-            id_dict[data['id']] = 1
+            id_dict[data[id_key]] = 1
     for data in trainset:
-        old_id = data['id']
+        old_id = data[id_key]
         if id_dict[old_id] > 1:
             new_id = old_id + '-' + str(id_dict[old_id] - 1)
-            data['id'] = new_id
+            data[id_key] = new_id
             id_dict[old_id] = id_dict[old_id] - 1
     for data in validset:
-        old_id = data['id']
+        old_id = data[id_key]
         if id_dict[old_id] > 1:
             new_id = old_id + '-' + str(id_dict[old_id] - 1)
-            data['id'] = new_id
+            data[id_key] = new_id
             id_dict[old_id] = id_dict[old_id] - 1
     for data in testset:
-        old_id = data['id']
+        old_id = data[id_key]
         if id_dict[old_id] > 1:
             new_id = old_id + '-' + str(id_dict[old_id] - 1)
-            data['id'] = new_id
+            data[id_key] = new_id
             id_dict[old_id] = id_dict[old_id] - 1
     return trainset, validset, testset
 
 
-def dataset_drop_duplication(trainset, validset, testset):
+def dataset_drop_duplication(trainset, validset, testset, id_key='id'):
     id_dict = {}
     for data in trainset:
-        if not isinstance(data['id'], str):
-            data['id'] = str(data['id'])
+        if not isinstance(data[id_key], str):
+            data[id_key] = str(data[id_key])
         try:
-            id_dict[data['id']] = id_dict[data['id']] + 1
+            id_dict[data[id_key]] = id_dict[data[id_key]] + 1
         except:
-            id_dict[data['id']] = 1
+            id_dict[data[id_key]] = 1
     for data in validset:
-        if not isinstance(data['id'], str):
-            data['id'] = str(data['id'])
+        if not isinstance(data[id_key], str):
+            data[id_key] = str(data[id_key])
         try:
-            id_dict[data['id']] = id_dict[data['id']] + 1
+            id_dict[data[id_key]] = id_dict[data[id_key]] + 1
         except:
-            id_dict[data['id']] = 1
+            id_dict[data[id_key]] = 1
     for data in testset:
-        if not isinstance(data['id'], str):
-            data['id'] = str(data['id'])
+        if not isinstance(data[id_key], str):
+            data[id_key] = str(data[id_key])
         try:
-            id_dict[data['id']] = id_dict[data['id']] + 1
+            id_dict[data[id_key]] = id_dict[data[id_key]] + 1
         except:
-            id_dict[data['id']] = 1
+            id_dict[data[id_key]] = 1
     drop_train=[]
     drop_valid=[]
     drop_test=[]
     for idx,data in enumerate(trainset):
-        old_id = data['id']
+        old_id = data[id_key]
         if id_dict[old_id] > 1:
             drop_train.append(idx-len(drop_train))
             id_dict[old_id] = id_dict[old_id] - 1
     for idx,data in enumerate(validset):
-        old_id = data['id']
+        old_id = data[id_key]
         if id_dict[old_id] > 1:
             drop_valid.append(idx-len(drop_valid))
             id_dict[old_id] = id_dict[old_id] - 1
     for idx,data in enumerate(testset):
-        old_id = data['id']
+        old_id = data[id_key]
         if id_dict[old_id] > 1:
             drop_test.append(idx-len(drop_test))
             id_dict[old_id] = id_dict[old_id] - 1
