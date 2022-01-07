@@ -184,3 +184,4 @@ cython_debug/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
 dataset/kor_di_asdiv-a/
+dataset/kor_asdiv-a/
